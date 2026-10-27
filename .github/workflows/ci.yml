@@ -84,6 +84,8 @@ jobs:
           echo "::group::Windows build log"
           tail -120 win-build.log || true
           echo "::endgroup::"
+          message="$(tail -c 1800 win-build.log | tr '\n' ' ' | tr -cd '[:print:]')"
+          echo "::error title=Windows build log::$message"
 
       - name: Upload Windows artifacts
         if: github.event_name != 'pull_request'
