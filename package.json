@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node --test tests",
+    "test": "node --test \"tests/*.test.js\"",
     "probe:hid": "node tools/hid-probe.js list",
     "probe:atk": "node tools/hid-probe.js atk",
     "probe:razer": "node tools/hid-probe.js razer",
