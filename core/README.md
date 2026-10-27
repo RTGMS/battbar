@@ -27,9 +27,22 @@ core/
 `tools/hid-probe.js`），校验和公式各写各的，行为已经出现分歧（见下方"已知差异"）。
 把协议放进一个可测试的核心里，平台层只负责"开设备、读字节、画界面"。
 
-**macOS 应用已经接入**：`ATKProtocol.swift` / `RazerProtocol.swift` 不再自己实现协议，
-改为调用本目录的 C ABI（`core/battbar-ffi`），在 `macos/scripts/build-native.sh` 里按架构编译成
-静态库并链接进 bundle。应用自己的 34 项 Swift 测试现在跑的就是 Rust 核心。
+## 分工：规则全在 Rust，Swift 只剩 UI 与 OS 调用
+
+macOS 应用已经接入：`macos/BattBar/Sources/Core/CoreBridge.swift` 是**唯一**的 FFI 绑定层，
+只做指针搬运，不含任何判断逻辑。
+
+| 归 Rust（`core/`） | 归 Swift（`macos/`） |
+| --- | --- |
+| ATK / Razer 组包、校验和、解码 | IOKit 枚举、打开设备、读写报告 |
+| 电量换算、充满/低电量判定 | 菜单栏与面板绘制、动画、文案 |
+| 蓝牙属性选择、充电字段解析 | 启动 `system_profiler`、解析它返回的 JSON 结构 |
+| 鼠标识别、设备稳定 ID | 构造 `MouseDevice` 模型对象 |
+| 设备保留/排序/当前选中策略 | `@Published` 状态、SwiftUI 绑定 |
+| 低电量提醒阈值与去重 | 发通知、申请权限、通知文案 |
+| ATK 候选设备过滤（IOKit 模型） | 设置持久化、开机启动、全屏检测 |
+
+判断标准很简单：**能写成"给定输入，输出唯一"的规则 → Rust**；**需要调系统 API 或画东西 → Swift**。
 
 ## 快速开始
 

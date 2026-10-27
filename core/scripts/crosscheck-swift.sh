@@ -39,6 +39,7 @@ cp "$CORE/target/$(uname -m | sed 's/arm64/aarch64/')-apple-darwin/release/libba
   "$OUT/.core/libbattbar_ffi.a"
 
 FILES=(
+  "$SRC/Core/CoreBridge.swift"
   "$SRC/Providers/Models.swift"
   "$SRC/Providers/HIDSupport.swift"
   "$SRC/Providers/ATKProtocol.swift"

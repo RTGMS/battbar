@@ -1,13 +1,15 @@
 import Foundation
 
+/// Reads battery levels for Bluetooth mice that macOS already knows about.
+///
+/// This type is deliberately thin: it runs `system_profiler`, walks the JSON
+/// shape Apple gives us, and hands each device's attributes to the Rust core,
+/// which owns the rules (which attribute wins, how charging is spelled, what
+/// counts as a mouse, how the stable id is built).
 final class BluetoothProvider {
     private var cachedOutcome: ProviderOutcome?
     private var cachedAt: Date?
     private let cacheLifetime: TimeInterval = 120
-    private let mousePattern = try! NSRegularExpression(
-        pattern: "mouse|mice|鼠标|atk|vxe|mad\\s*r|razer|雷蛇|logitech|罗技|pulsar|lamzu|ninja|glorious|zowie|benq|steelseries|赛睿|roccat|corsair|海盗船|hyperx|pwnage|finalmouse|endgame|mx\\s*(master|anywhere)|deathadder|viper|basilisk|aerox|rival",
-        options: [.caseInsensitive]
-    )
 
     func scan(force: Bool = false) -> ProviderOutcome {
         if !force,
@@ -65,6 +67,7 @@ final class BluetoothProvider {
         return ProviderOutcome(devices: devices, issues: [])
     }
 
+    /// Walk `SPBluetoothDataType` and hand every device to the core.
     func parseBluetoothPayload(_ payload: [String: Any]) -> [MouseDevice] {
         let roots: [[String: Any]]
         if let array = payload["SPBluetoothDataType"] as? [[String: Any]] {
@@ -92,28 +95,25 @@ final class BluetoothProvider {
                     guard let attributes = raw as? [String: Any] else { continue }
                     let name = (attributes["device_name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? entryName
                     let minorType = attributes["device_minorType"] as? String ?? ""
-                    guard isMouse(name: name, minorType: minorType) else { continue }
-                    guard let battery = batteryLevel(attributes) else { continue }
+
+                    // The core owns the recognition rule.
+                    guard CoreBridge.isLikelyMouse(name: name, minorType: minorType) else { continue }
+                    guard let battery = CoreBridge.bluetoothBattery(attributes) else { continue }
+
                     let address = (attributes["device_address"] as? String)?.lowercased() ?? ""
                     let key = address.isEmpty ? name.lowercased() : address
                     guard seen.insert(key).inserted else { continue }
 
-                    let id: String
-                    if address.isEmpty {
-                        id = "bt-macos:\(name.lowercased())"
-                    } else {
-                        id = "bt-macos:\(address)"
-                    }
                     let variant = [minorType, address].filter { !$0.isEmpty }.joined(separator: " · ")
                     result.append(MouseDevice(
-                        id: id,
+                        id: CoreBridge.bluetoothDeviceID(address: address, name: name),
                         provider: .bluetooth,
                         name: name,
                         subtitle: variant,
                         connection: .bluetooth,
                         source: "macOS 蓝牙",
                         battery: battery,
-                        charging: chargingState(attributes),
+                        charging: CoreBridge.bluetoothCharging(attributes),
                         lastSeen: Date(),
                         isStale: false,
                         hardware: ["minorType": minorType, "address": address]
@@ -122,65 +122,5 @@ final class BluetoothProvider {
             }
         }
         return result
-    }
-
-    private func isMouse(name: String, minorType: String) -> Bool {
-        if minorType.localizedCaseInsensitiveContains("mouse")
-            || minorType.localizedCaseInsensitiveContains("pointing") {
-            return true
-        }
-        let haystack = name + " " + minorType
-        let range = NSRange(location: 0, length: haystack.utf16.count)
-        return mousePattern.firstMatch(in: haystack, range: range) != nil
-    }
-
-    private func batteryLevel(_ attributes: [String: Any]) -> Int? {
-        let preferred = [
-            "device_batteryLevelMain",
-            "device_batteryLevel",
-            "device_batteryPercent",
-            "device_batteryLevelCombined",
-        ]
-        for key in preferred {
-            if let value = parsePercent(attributes[key]) { return value }
-        }
-        for (key, value) in attributes where key.lowercased().hasPrefix("device_battery") {
-            if key.lowercased().contains("case") || key.lowercased().contains("left")
-                || key.lowercased().contains("right") || key.lowercased().contains("secondary") {
-                continue
-            }
-            if let parsed = parsePercent(value) { return parsed }
-        }
-        return nil
-    }
-
-    private func parsePercent(_ raw: Any?) -> Int? {
-        let number: Int?
-        if let value = raw as? Int {
-            number = value
-        } else if let value = raw as? NSNumber {
-            number = value.intValue
-        } else if let value = raw as? String {
-            let scanner = Foundation.Scanner(string: value)
-            number = scanner.scanInt()
-        } else {
-            number = nil
-        }
-        guard let number, (0...100).contains(number) else { return nil }
-        return number
-    }
-
-    private func chargingState(_ attributes: [String: Any]) -> Bool? {
-        for key in ["device_charging", "device_batteryCharging", "charging"] {
-            guard let value = attributes[key] else { continue }
-            if let bool = value as? Bool { return bool }
-            if let number = value as? NSNumber { return number.boolValue }
-            if let string = value as? String {
-                let normalized = string.lowercased()
-                if ["yes", "true", "1", "charging"].contains(normalized) { return true }
-                if ["no", "false", "0", "discharging"].contains(normalized) { return false }
-            }
-        }
-        return nil
     }
 }

@@ -37,6 +37,7 @@ cargo build --manifest-path "$CORE/Cargo.toml" --release \
 cp "$CORE/target/aarch64-apple-darwin/release/libbattbar_ffi.a" "$CORE_LIB_DIR/libbattbar_ffi.a"
 
 FILES=(
+  "$SRC/Core/CoreBridge.swift"
   "$SRC/Providers/Models.swift"
   "$SRC/Providers/HIDSupport.swift"
   "$SRC/Providers/ATKProtocol.swift"

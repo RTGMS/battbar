@@ -215,6 +215,89 @@ if let bluetooth = vectors["bluetooth"] as? [String: Any] {
     }
 }
 
+// MARK: - Alerts binding
+
+if let alertsSection = vectors["alerts"] as? [String: Any],
+   let scenarios = alertsSection["scenarios"] as? [[String: Any]] {
+    for scenario in scenarios {
+        let label = scenario["name"] as? String ?? "<unnamed>"
+        guard appliesToSwift(scenario) else { skipped += 1; continue }
+
+        let enabled = scenario["enabled"] as? Bool ?? true
+        let manager = CoreAlertManager()
+
+        for (index, step) in (scenario["steps"] as? [[String: Any]] ?? []).enumerated() {
+            let devices = (step["devices"] as? [[String: Any]] ?? []).map { entry in
+                MouseDevice(
+                    id: entry["id"] as? String ?? "",
+                    provider: .atk,
+                    name: "test",
+                    subtitle: "",
+                    connection: .receiver,
+                    source: "test",
+                    battery: entry["battery"] as? Int,
+                    charging: entry["charging"] as? Bool,
+                    lastSeen: Date(),
+                    isStale: entry["stale"] as? Bool ?? false,
+                    hardware: [:]
+                )
+            }
+            let expected = (step["expect"] as? [String]) ?? []
+            let actual = manager.evaluate(devices, enabled: enabled).map { alert -> String in
+                switch alert.kind {
+                case .low: return "low"
+                case .critical: return "critical"
+                }
+            }
+            check(
+                actual == expected,
+                "alerts \(label) step \(index): expected \(expected), got \(actual)"
+            )
+        }
+    }
+}
+
+// MARK: - Merge binding
+
+do {
+    func device(_ id: String, _ name: String, _ provider: DeviceProviderKind, _ connection: DeviceConnection) -> MouseDevice {
+        MouseDevice(id: id, provider: provider, name: name, subtitle: "",
+                    connection: connection, source: "test", battery: 50, charging: false,
+                    lastSeen: Date(), isStale: false, hardware: [:])
+    }
+
+    let previous = [
+        device("atk-1", "ATK 无线鼠标", .atk, .receiver),
+        device("bt-1", "MX Master", .bluetooth, .bluetooth),
+    ]
+    let fresh = [device("bt-1", "MX Master", .bluetooth, .bluetooth)]
+
+    // ATK failed: its last reading is retained, marked stale, and still first.
+    let merged = CoreBridge.merge(
+        fresh: fresh,
+        previous: previous,
+        failedProviders: [.atk],
+        selectedID: nil
+    )
+    check(merged.devices.count == 2, "merge: expected 2 devices, got \(merged.devices.count)")
+    check(merged.devices.first?.id == "atk-1", "merge: retained ATK device should sort first")
+    check(merged.devices.first?.isStale == true, "merge: retained device must be stale")
+    check(merged.devices.last?.id == "bt-1", "merge: fresh Bluetooth device should follow")
+    check(merged.devices.last?.isStale == false, "merge: fresh device must not be stale")
+    check(merged.activeID == "atk-1", "merge: active should be the first device, got \(String(describing: merged.activeID))")
+
+    // A saved selection wins.
+    let selected = CoreBridge.merge(
+        fresh: fresh, previous: previous, failedProviders: [], selectedID: "bt-1"
+    )
+    check(selected.activeID == "bt-1", "merge: saved selection should win")
+    check(selected.devices.count == 1, "merge: recovered provider should not retain")
+
+    // Nothing at all.
+    let empty = CoreBridge.merge(fresh: [], previous: [], failedProviders: [], selectedID: nil)
+    check(empty.devices.isEmpty && empty.activeID == nil, "merge: empty scan")
+}
+
 // MARK: - Summary
 
 print("swift cross-check: \(checks) checks, \(failures) failure(s), \(skipped) skipped")

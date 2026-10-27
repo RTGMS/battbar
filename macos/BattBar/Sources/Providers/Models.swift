@@ -93,6 +93,3 @@ struct ScanOutcome {
     var timestamp: Date = Date()
 }
 
-func normalizedBattery(_ raw: Int) -> Int {
-    max(0, min(100, raw))
-}

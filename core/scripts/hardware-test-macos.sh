@@ -55,6 +55,7 @@ HOME="$OUT/.cache/home" swiftc -Onone \
   -module-cache-path "$OUT/.cache/clang" \
   -import-objc-header "$ROOT/core/battbar-ffi/include/battbar_core.h" \
   -L "$ROOT/core/target/macos" -lbattbar_ffi \
+  "$SRC/Core/CoreBridge.swift" \
   "$SRC/Providers/Models.swift" \
   "$SRC/Providers/HIDSupport.swift" \
   "$SRC/Providers/ATKProtocol.swift" \

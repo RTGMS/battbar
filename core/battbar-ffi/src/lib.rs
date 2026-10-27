@@ -275,6 +275,414 @@ pub unsafe extern "C" fn battbar_razer_decode_charging(
     }
 }
 
+// ---- Scan merge --------------------------------------------------------
+
+/// One device as the merge policy sees it.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BattbarDeviceSummary {
+    /// Stable device id (NUL-terminated).
+    pub id: *const std::os::raw::c_char,
+    /// Display name (NUL-terminated); used for ordering.
+    pub name: *const std::os::raw::c_char,
+    /// 0 ATK, 1 Razer, 2 Bluetooth.
+    pub provider: i32,
+    /// 0 receiver, 1 Bluetooth.
+    pub connection: i32,
+}
+
+/// Where a merged entry came from.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BattbarMergedDevice {
+    /// 0 = taken from `fresh`, 1 = retained from `previous`.
+    pub from_previous: u8,
+    /// Index into that slice.
+    pub index: i32,
+    /// 1 when the reading is retained from an earlier scan.
+    pub stale: u8,
+}
+
+/// Merge a scan with the previous result and pick the active device.
+///
+/// `out_entries` must have room for `fresh_count + previous_count` entries;
+/// `out_count` and `out_active` receive the entry count and the index of the
+/// active device (`-1` when there is none). Returns 0 or an error code.
+///
+/// # Safety
+/// All slices must be valid for their advertised lengths.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_merge_scan(
+    fresh: *const BattbarDeviceSummary,
+    fresh_count: i32,
+    previous: *const BattbarDeviceSummary,
+    previous_count: i32,
+    failed_providers: *const i32,
+    failed_count: i32,
+    selected_id: *const std::os::raw::c_char,
+    out_entries: *mut BattbarMergedDevice,
+    out_count: *mut i32,
+    out_active: *mut i32,
+) -> i32 {
+    if fresh_count < 0 || previous_count < 0 || failed_count < 0 {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    if out_entries.is_null() || out_count.is_null() || out_active.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    if (fresh_count > 0 && fresh.is_null()) || (previous_count > 0 && previous.is_null()) {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    if failed_count > 0 && failed_providers.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+
+    // Collect the borrowed summaries; the C strings stay owned by the caller.
+    let mut fresh_ids: Vec<String> = Vec::new();
+    let mut previous_ids: Vec<String> = Vec::new();
+    let mut fresh_names: Vec<String> = Vec::new();
+    let mut previous_names: Vec<String> = Vec::new();
+
+    let collect = |entries: *const BattbarDeviceSummary,
+                   count: i32,
+                   ids: &mut Vec<String>,
+                   names: &mut Vec<String>|
+     -> Vec<(u8, u8)> {
+        let mut kinds = Vec::new();
+        for index in 0..count as usize {
+            // SAFETY: the caller guarantees `count` readable entries.
+            let entry = unsafe { &*entries.add(index) };
+            ids.push(unsafe { c_str_or_empty(entry.id) }.to_string());
+            names.push(unsafe { c_str_or_empty(entry.name) }.to_string());
+            kinds.push((entry.provider as u8, entry.connection as u8));
+        }
+        kinds
+    };
+
+    let fresh_kinds = collect(fresh, fresh_count, &mut fresh_ids, &mut fresh_names);
+    let previous_kinds = collect(
+        previous,
+        previous_count,
+        &mut previous_ids,
+        &mut previous_names,
+    );
+
+    let fresh_summaries = to_summaries(&fresh_ids, &fresh_names, &fresh_kinds);
+    let previous_summaries = to_summaries(&previous_ids, &previous_names, &previous_kinds);
+
+    let mut failed: Vec<battbar_core::merge::Provider> = Vec::new();
+    for index in 0..failed_count as usize {
+        // SAFETY: the caller guarantees `failed_count` readable entries.
+        if let Some(provider) =
+            battbar_core::merge::Provider::from_code(unsafe { *failed_providers.add(index) })
+        {
+            failed.push(provider);
+        }
+    }
+
+    let selected = unsafe { c_str_or_empty(selected_id) };
+    let selected = if selected.is_empty() {
+        None
+    } else {
+        Some(selected)
+    };
+
+    let (merged, active) =
+        battbar_core::merge::merge_scan(&fresh_summaries, &previous_summaries, &failed, selected);
+
+    // SAFETY: the caller promises room for fresh_count + previous_count entries.
+    let out = unsafe {
+        std::slice::from_raw_parts_mut(out_entries, (fresh_count + previous_count) as usize)
+    };
+    for (slot, entry) in out.iter_mut().zip(merged.iter()) {
+        *slot = BattbarMergedDevice {
+            from_previous: u8::from(entry.from_previous),
+            index: entry.index as i32,
+            stale: u8::from(entry.stale),
+        };
+    }
+    // SAFETY: validated non-null above.
+    unsafe {
+        *out_count = merged.len() as i32;
+        *out_active = active.map_or(-1, |index| index as i32);
+    }
+    0
+}
+
+// ---- Bluetooth ---------------------------------------------------------
+
+/// Read a battery percentage out of a flattened macOS attribute list.
+///
+/// `keys` and `values` are parallel arrays of `count` NUL-terminated UTF-8
+/// strings. Returns `0..=100`, or [`status::ERROR_INVALID_ARGUMENT`] when no
+/// usable battery attribute is present.
+///
+/// # Safety
+/// Both arrays must contain `count` valid C strings (or be null when `count`
+/// is 0).
+#[no_mangle]
+pub unsafe extern "C" fn battbar_bluetooth_battery(
+    count: i32,
+    keys: *const *const std::os::raw::c_char,
+    values: *const *const std::os::raw::c_char,
+) -> i32 {
+    let Some(pairs) = (unsafe { collect_pairs(count, keys, values) }) else {
+        return status::ERROR_INVALID_ARGUMENT;
+    };
+    match battbar_core::bluetooth::battery_from_attributes(&pairs) {
+        Some(percent) => i32::from(percent),
+        None => status::ERROR_INVALID_ARGUMENT,
+    }
+}
+
+/// Read the charging flag out of a flattened macOS attribute list.
+///
+/// Returns `1` (charging), `0` (not charging) or
+/// [`status::ERROR_INVALID_ARGUMENT`] when the device does not say.
+///
+/// # Safety
+/// Same contract as [`battbar_bluetooth_battery`].
+#[no_mangle]
+pub unsafe extern "C" fn battbar_bluetooth_charging(
+    count: i32,
+    keys: *const *const std::os::raw::c_char,
+    values: *const *const std::os::raw::c_char,
+) -> i32 {
+    let Some(pairs) = (unsafe { collect_pairs(count, keys, values) }) else {
+        return status::ERROR_INVALID_ARGUMENT;
+    };
+    match battbar_core::bluetooth::charging_from_attributes(&pairs) {
+        Some(true) => 1,
+        Some(false) => 0,
+        None => status::ERROR_INVALID_ARGUMENT,
+    }
+}
+
+/// Whether a device name / minor type pair looks like a mouse.
+///
+/// # Safety
+/// Both pointers must be null or valid NUL-terminated UTF-8 C strings.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_bluetooth_is_likely_mouse(
+    name: *const std::os::raw::c_char,
+    minor_type: *const std::os::raw::c_char,
+) -> u8 {
+    let name = unsafe { c_str_or_empty(name) };
+    let minor = unsafe { c_str_or_empty(minor_type) };
+    u8::from(battbar_core::bluetooth::is_likely_mouse(name, minor))
+}
+
+/// Write the stable id for a macOS Bluetooth device into `out`.
+///
+/// Returns the number of bytes written (excluding the NUL) or
+/// [`status::ERROR_INVALID_ARGUMENT`] when the buffer is too small.
+///
+/// # Safety
+/// `out` must be valid for writes of `out_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_bluetooth_macos_id(
+    address: *const std::os::raw::c_char,
+    name: *const std::os::raw::c_char,
+    out: *mut std::os::raw::c_char,
+    out_len: usize,
+) -> i32 {
+    if out.is_null() || out_len == 0 {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    let address = unsafe { c_str_or_empty(address) };
+    let name = unsafe { c_str_or_empty(name) };
+    let id = battbar_core::bluetooth::macos_device_id(address, name);
+    let bytes = id.as_bytes();
+    if bytes.len() + 1 > out_len {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    // SAFETY: the caller guarantees `out_len` writable bytes and the length was
+    // checked above.
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), bytes.len());
+        *out.add(bytes.len()) = 0;
+    }
+    bytes.len() as i32
+}
+
+// ---- Low battery alerts ------------------------------------------------
+
+/// Opaque state for [`battbar_alerts_evaluate`]; create with
+/// [`battbar_alerts_new`] and release with [`battbar_alerts_free`].
+pub struct BattbarAlertManager {
+    inner: std::sync::Mutex<battbar_core::alerts::AlertManager>,
+}
+
+/// One device as far as alerting is concerned.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BattbarAlertDevice {
+    /// Stable device id (NUL-terminated).
+    pub id: *const std::os::raw::c_char,
+    /// Battery percentage, or a negative value when unknown.
+    pub battery: i32,
+    /// 1 charging, 0 not charging, negative unknown.
+    pub charging: i32,
+    /// Non-zero when the reading is a retained stale value.
+    pub stale: u8,
+}
+
+/// Create an alert manager. Returns null on allocation failure.
+#[no_mangle]
+pub extern "C" fn battbar_alerts_new() -> *mut BattbarAlertManager {
+    let manager = Box::new(BattbarAlertManager {
+        inner: std::sync::Mutex::new(battbar_core::alerts::AlertManager::new()),
+    });
+    Box::into_raw(manager)
+}
+
+/// Release an alert manager created by [`battbar_alerts_new`].
+///
+/// # Safety
+/// `manager` must come from [`battbar_alerts_new`] and not be used afterwards.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_alerts_free(manager: *mut BattbarAlertManager) {
+    if manager.is_null() {
+        return;
+    }
+    // SAFETY: owned pointer from battbar_alerts_new, dropped once here.
+    drop(unsafe { Box::from_raw(manager) });
+}
+
+/// Evaluate one scan result.
+///
+/// `out_kinds` receives one byte per device: `0` no alert, `1` low, `2`
+/// critical. Returns 0 on success or [`status::ERROR_INVALID_ARGUMENT`].
+///
+/// # Safety
+/// `manager` must be valid; `devices` and `out_kinds` must be valid for
+/// `count` elements.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_alerts_evaluate(
+    manager: *mut BattbarAlertManager,
+    devices: *const BattbarAlertDevice,
+    count: i32,
+    enabled: u8,
+    out_kinds: *mut u8,
+) -> i32 {
+    if manager.is_null() || out_kinds.is_null() || count < 0 {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    if count > 0 && devices.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+
+    // Collect the ids first so the borrowed slices live long enough.
+    let mut ids: Vec<String> = Vec::with_capacity(count as usize);
+    let mut inputs: Vec<(Option<u8>, Option<bool>, bool)> = Vec::with_capacity(count as usize);
+    for index in 0..count as usize {
+        // SAFETY: the caller guarantees `count` readable entries.
+        let entry = unsafe { &*devices.add(index) };
+        ids.push(unsafe { c_str_or_empty(entry.id) }.to_string());
+        inputs.push((
+            u8::try_from(entry.battery).ok(),
+            match entry.charging {
+                1 => Some(true),
+                0 => Some(false),
+                _ => None,
+            },
+            entry.stale != 0,
+        ));
+    }
+
+    let alert_devices: Vec<battbar_core::alerts::AlertDevice<'_>> = ids
+        .iter()
+        .zip(inputs.iter())
+        .map(
+            |(id, (battery, charging, stale))| battbar_core::alerts::AlertDevice {
+                id: id.as_str(),
+                battery: *battery,
+                charging: *charging,
+                stale: *stale,
+            },
+        )
+        .collect();
+
+    // SAFETY: validated as non-null above.
+    let state = unsafe { &*manager };
+    let Ok(mut guard) = state.inner.lock() else {
+        // A poisoned lock means a previous panic; treat it as unusable.
+        return status::ERROR_INVALID_ARGUMENT;
+    };
+    let events = guard.evaluate(&alert_devices, enabled != 0);
+
+    // Map back to per-device kinds.
+    // SAFETY: the caller provides `count` writable bytes.
+    unsafe { std::slice::from_raw_parts_mut(out_kinds, count as usize) }.fill(0);
+    for event in events {
+        if let Some(position) = ids.iter().position(|id| id == event.device_id) {
+            let kind = match event.kind {
+                battbar_core::alerts::AlertKind::Low => 1u8,
+                battbar_core::alerts::AlertKind::Critical => 2u8,
+            };
+            // SAFETY: position is within `count`.
+            unsafe { *out_kinds.add(position) = kind };
+        }
+    }
+    0
+}
+
+/// Pair ids/names with their provider/connection codes for the merge policy.
+fn to_summaries<'a>(
+    ids: &'a [String],
+    names: &'a [String],
+    kinds: &'a [(u8, u8)],
+) -> Vec<battbar_core::merge::DeviceSummary<'a>> {
+    ids.iter()
+        .zip(names.iter())
+        .zip(kinds.iter())
+        .filter_map(|((id, name), (provider, connection))| {
+            Some(battbar_core::merge::DeviceSummary {
+                id: id.as_str(),
+                name: name.as_str(),
+                provider: battbar_core::merge::Provider::from_code(i32::from(*provider))?,
+                connection: battbar_core::merge::Connection::from_code(i32::from(*connection))?,
+            })
+        })
+        .collect()
+}
+
+/// Collect parallel key/value arrays into borrowed pairs.
+///
+/// # Safety
+/// Caller guarantees both arrays hold `count` valid strings.
+#[allow(clippy::needless_lifetimes)]
+unsafe fn collect_pairs<'a>(
+    count: i32,
+    keys: *const *const std::os::raw::c_char,
+    values: *const *const std::os::raw::c_char,
+) -> Option<Vec<(&'a str, &'a str)>> {
+    if count < 0 || (count > 0 && (keys.is_null() || values.is_null())) {
+        return None;
+    }
+    let count = count as usize;
+    let mut pairs = Vec::with_capacity(count);
+    for index in 0..count {
+        // SAFETY: caller guarantees `count` readable pointers.
+        let key = unsafe { c_str_or_empty(*keys.add(index)) };
+        let value = unsafe { c_str_or_empty(*values.add(index)) };
+        pairs.push((key, value));
+    }
+    Some(pairs)
+}
+
+/// # Safety
+/// `pointer` must be null or a valid NUL-terminated UTF-8 string.
+unsafe fn c_str_or_empty<'a>(pointer: *const std::os::raw::c_char) -> &'a str {
+    if pointer.is_null() {
+        return "";
+    }
+    // SAFETY: the caller guarantees a NUL-terminated string.
+    unsafe { std::ffi::CStr::from_ptr(pointer) }
+        .to_str()
+        .unwrap_or("")
+}
+
 /// Parse a percentage out of a string such as `"75%"`.
 ///
 /// Returns `0..=100`, or [`status::ERROR_INVALID_ARGUMENT`] when the string is

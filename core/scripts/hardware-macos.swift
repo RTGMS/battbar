@@ -66,6 +66,15 @@ let referenceRequest: [UInt8] = {
 
 // MARK: - Report capture
 
+/// Keeps callback contexts and buffers alive for the whole process.
+///
+/// IOKit does not promise that a callback is not in flight when the device is
+/// unregistered, and a late callback writing into a deallocated buffer corrupts
+/// the heap (this crashed intermittently on the timeout path). The harness is
+/// short-lived, so leaking a few dozen bytes per read is the cheap fix.
+var retainedCallbacks: [AnyObject] = []
+var retainedBuffers: [UnsafeMutablePointer<UInt8>] = []
+
 /// Collects the first ATK response seen on the input-report callback.
 final class Capture {
     var bytes: [UInt8]?
@@ -98,9 +107,11 @@ func readOnce(descriptor: HIDDeviceDescriptor, request: [UInt8], timeout: TimeIn
     let bufferLength = max(64, hidInt(device, kIOHIDMaxInputReportSizeKey) ?? 0)
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferLength)
     buffer.initialize(repeating: 0, count: bufferLength)
-    defer { buffer.deallocate() }
+    // Deliberately not deallocated: see `retainedBuffers`.
+    retainedBuffers.append(buffer)
 
     let capture = Capture()
+    retainedCallbacks.append(capture)
     let context = Unmanaged.passUnretained(capture).toOpaque()
     IOHIDDeviceRegisterInputReportCallback(
         device,
@@ -117,6 +128,11 @@ func readOnce(descriptor: HIDDeviceDescriptor, request: [UInt8], timeout: TimeIn
     defer {
         IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDDeviceRegisterInputReportCallback(device, buffer, bufferLength, nil, nil)
+        // Unregistering does not wait for callbacks that are already in flight.
+        // Drain the run loop while both the buffer and the capture object are
+        // still alive, otherwise a late callback touches freed memory (this
+        // crashed intermittently on the timeout path).
+        RunLoop.current.run(until: Date().addingTimeInterval(0.08))
     }
 
     let writeResult = request.withUnsafeBufferPointer {
@@ -228,9 +244,15 @@ func testATK() -> Bool {
     check(successes > 0, "至少要有一次成功读取（鼠标休眠时属预期失败，唤醒后重跑）")
 
     // Readings should be stable across a short window (the mouse is idle).
-    if decoded.count > 1 {
-        let distinct = Set(decoded.map { "\($0.0)/\($0.1)" })
-        check(distinct.count == 1, "短时间内读数应稳定，实际出现 \(distinct.count) 种: \(distinct)")
+    // A plain loop is used instead of Set: constructing a generic Set here hit
+    // an intermittent Swift runtime crash inside metadata instantiation.
+    if let first = decoded.first {
+        for (battery, charging) in decoded {
+            check(
+                battery == first.0 && charging == first.1,
+                "短时间内读数应稳定：首次 \(first.0)%/\(first.1)，本次 \(battery)%/\(charging)"
+            )
+        }
     }
 
     // macOS selection rule: IOKit exposes one entry per device and only the

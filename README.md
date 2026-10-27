@@ -193,9 +193,9 @@ npm run probe:razer    # 发送 Razer 90 字节 feature report，打印原始应
 | Windows | 原生托盘（待定） | HIDAPI | `core/`（Rust crate 直接依赖） | 计划中；旧 Electron 版可先用 |
 | Linux | 原生托盘（待定） | `hidraw` + `HIDIOCGFEATURE` | `core/` | 计划中 |
 
-协议封包、校验和、电量换算、低电量去重与测试向量已经收拢到 [`core/`](core/README.md)：
-一份 Rust 实现，`#![forbid(unsafe_code)]`、零运行时依赖。macOS 应用已经接入它——
-`ATKProtocol` / `RazerProtocol` 只是 FFI 的薄封装，构建时把核心静态链接进 bundle。
+**规则全部在 Rust，Swift 只负责 UI 和系统调用。** 协议、电量判定、设备识别、排序策略、
+低电量去重都收拢在 [`core/`](core/README.md)：一份实现，`#![forbid(unsafe_code)]`、零运行时依赖。
+macOS 应用通过 C ABI 静态链接它，`CoreBridge.swift` 只做指针搬运，不含任何判断逻辑。
 测试向量 `core/vectors/vectors.json` 仍由 Rust / Swift / JavaScript 三方回放
 （`core/scripts/test-all.sh`）。
 

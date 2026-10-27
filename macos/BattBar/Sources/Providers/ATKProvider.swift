@@ -7,8 +7,14 @@ final class AtkProvider {
 
     func scan() -> ProviderOutcome {
         let session = HIDEnumerationSession(vendorIDs: Self.vendorIDs)
+        // The core owns the macOS selection rule (one entry per device, primary
+        // usage page in the vendor range).
         let candidates = session.devices.filter { descriptor in
-            descriptor.primaryUsagePage >= 0xff00
+            CoreBridge.isATKCandidate(
+                vendorID: descriptor.vendorID,
+                usagePage: descriptor.primaryUsagePage,
+                usage: descriptor.primaryUsage
+            )
         }
 
         guard !candidates.isEmpty else { return ProviderOutcome() }

@@ -136,6 +136,109 @@ int32_t battbar_razer_decode_battery(const uint8_t *bytes, size_t len,
 int32_t battbar_razer_decode_charging(const uint8_t *bytes, size_t len,
                                       BattbarReading *out);
 
+/* ---- Scan merge -------------------------------------------------------- */
+
+/** One device as the merge policy sees it. */
+typedef struct BattbarDeviceSummary {
+  const char *id;
+  const char *name;
+  /** 0 ATK, 1 Razer, 2 Bluetooth. */
+  int32_t provider;
+  /** 0 receiver, 1 Bluetooth. */
+  int32_t connection;
+} BattbarDeviceSummary;
+
+/** Where a merged entry came from. */
+typedef struct BattbarMergedDevice {
+  /** 0 = taken from `fresh`, 1 = retained from `previous`. */
+  uint8_t from_previous;
+  /** Index into that slice. */
+  int32_t index;
+  /** 1 when the reading is retained from an earlier scan. */
+  uint8_t stale;
+} BattbarMergedDevice;
+
+/**
+ * Merge a scan with the previous result and pick the active device.
+ *
+ * `out_entries` must have room for `fresh_count + previous_count` entries.
+ * `out_active` receives `-1` when nothing is left. Returns 0 or an error code.
+ */
+int32_t battbar_merge_scan(const BattbarDeviceSummary *fresh, int32_t fresh_count,
+                           const BattbarDeviceSummary *previous, int32_t previous_count,
+                           const int32_t *failed_providers, int32_t failed_count,
+                           const char *selected_id, BattbarMergedDevice *out_entries,
+                           int32_t *out_count, int32_t *out_active);
+
+/* ---- Bluetooth --------------------------------------------------------- */
+
+/**
+ * Read a battery percentage out of a flattened macOS attribute list.
+ *
+ * `keys` / `values` are parallel arrays of `count` NUL-terminated UTF-8
+ * strings. Returns 0..100, or BATTBAR_ERROR_INVALID_ARGUMENT when absent.
+ */
+int32_t battbar_bluetooth_battery(int32_t count, const char *const *keys,
+                                  const char *const *values);
+
+/**
+ * Charging flag from the same attribute list.
+ *
+ * Returns 1 (charging), 0 (not charging) or BATTBAR_ERROR_INVALID_ARGUMENT.
+ */
+int32_t battbar_bluetooth_charging(int32_t count, const char *const *keys,
+                                   const char *const *values);
+
+/** 1 when the name / minor type pair looks like a mouse, 0 otherwise. */
+uint8_t battbar_bluetooth_is_likely_mouse(const char *name, const char *minor_type);
+
+/**
+ * Write the stable id for a macOS Bluetooth device into `out`.
+ *
+ * Returns the byte count written (excluding the NUL), or
+ * BATTBAR_ERROR_INVALID_ARGUMENT when the buffer is too small.
+ */
+int32_t battbar_bluetooth_macos_id(const char *address, const char *name,
+                                   char *out, size_t out_len);
+
+/* ---- Low battery alerts ------------------------------------------------ */
+
+/** Opaque alert manager state. */
+typedef struct BattbarAlertManager BattbarAlertManager;
+
+/** One device as far as alerting is concerned. */
+typedef struct BattbarAlertDevice {
+  /** Stable device id (NUL-terminated). */
+  const char *id;
+  /** Battery percentage, or a negative value when unknown. */
+  int32_t battery;
+  /** 1 charging, 0 not charging, negative unknown. */
+  int32_t charging;
+  /** Non-zero when the reading is a retained stale value. */
+  uint8_t stale;
+} BattbarAlertDevice;
+
+/** Alert kind values written to `out_kinds`. */
+#define BATTBAR_ALERT_NONE 0
+#define BATTBAR_ALERT_LOW 1
+#define BATTBAR_ALERT_CRITICAL 2
+
+/** Create an alert manager. Returns NULL on allocation failure. */
+BattbarAlertManager *battbar_alerts_new(void);
+
+/** Release an alert manager created by battbar_alerts_new(). */
+void battbar_alerts_free(BattbarAlertManager *manager);
+
+/**
+ * Evaluate one scan result.
+ *
+ * `out_kinds` receives one byte per device (BATTBAR_ALERT_*). Returns 0 on
+ * success or BATTBAR_ERROR_INVALID_ARGUMENT.
+ */
+int32_t battbar_alerts_evaluate(BattbarAlertManager *manager,
+                                const BattbarAlertDevice *devices, int32_t count,
+                                uint8_t enabled, uint8_t *out_kinds);
+
 /* ---- Helpers ----------------------------------------------------------- */
 
 /**

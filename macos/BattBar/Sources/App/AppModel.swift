@@ -53,26 +53,19 @@ final class AppModel: ObservableObject {
 
     func apply(_ outcome: ScanOutcome) {
         let previousDevices = devices
-        let failedProviders = Set(outcome.issues.map(\.provider))
         let fresh = outcome.devices
-        let retained = previousDevices
-            .filter { failedProviders.contains($0.provider) }
-            .filter { previous in !fresh.contains(where: { $0.provider == previous.provider }) }
-            .map { device -> MouseDevice in
-                var copy = device
-                copy.isStale = true
-                return copy
-            }
+        let failedProviders = Set(outcome.issues.map(\.provider))
 
-        devices = (fresh + retained).sorted { lhs, rhs in
-            if lhs.provider.priority != rhs.provider.priority {
-                return lhs.provider.priority < rhs.provider.priority
-            }
-            if lhs.connection != rhs.connection {
-                return lhs.connection == .receiver
-            }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-        }
+        // Retention, ordering and the active-device choice are core policy
+        // (`core/battbar-core/src/merge.rs`); this only rebuilds the models.
+        let resolved = CoreBridge.merge(
+            fresh: fresh,
+            previous: previousDevices,
+            failedProviders: failedProviders,
+            selectedID: activeDeviceID
+        )
+
+        devices = resolved.devices
         issues = outcome.issues
         lastAttempt = outcome.timestamp
         if !fresh.isEmpty {
@@ -81,13 +74,7 @@ final class AppModel: ObservableObject {
             lastUpdated = outcome.timestamp
         }
 
-        if let selected = activeDeviceID,
-           let match = devices.first(where: { $0.id == selected }) {
-            activeDeviceID = match.id
-        } else {
-            activeDeviceID = devices.first?.id
-        }
-
+        activeDeviceID = resolved.activeID
         isScanning = false
         onDevicesChanged?()
     }

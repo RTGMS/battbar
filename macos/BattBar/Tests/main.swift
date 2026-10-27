@@ -54,8 +54,18 @@ if case .failure(.invalidStatus(1))? = ATKProtocol.decode(reportID: 8, bytes: [0
     check(false, "ATK 非零状态码应报错")
 }
 check(ATKProtocol.decode(reportID: 9, bytes: [0x09, 0x04, 0, 0, 0, 50, 0]) == nil, "ATK 忽略其他 report ID")
-checkEqual(normalizedBattery(-5), 0, "电量下限")
-checkEqual(normalizedBattery(250), 100, "电量上限")
+// Clamping now lives in the core; verify it through the decoder instead of a
+// local helper.
+if case .success(let low)? = ATKProtocol.decode(reportID: 8, bytes: [0x04, 0, 0, 0, 0, 0, 0]) {
+    checkEqual(low.battery, 0, "电量下限")
+} else {
+    check(false, "电量下限应可解析")
+}
+if case .success(let high)? = ATKProtocol.decode(reportID: 8, bytes: [0x04, 0, 0, 0, 0, 250, 0]) {
+    checkEqual(high.battery, 100, "电量上限（核心钳制到 100）")
+} else {
+    check(false, "电量上限应可解析")
+}
 
 // MARK: Razer
 

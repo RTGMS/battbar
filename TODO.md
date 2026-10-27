@@ -102,8 +102,12 @@ x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用
 - [x] macOS 版接入核心（2026-10-27）：`ATKProtocol` / `RazerProtocol` 已改为 FFI 调用，
       `build-native.sh` 按架构编译静态库并链接；应用自身的 34 项 Swift 测试现在验证的是 Rust 核心。
       真机：`--probe` 读到 95%，`--self-test` PASS，硬件回环 21 项检查 0 失败。
-- [ ] 蓝牙规则仍未接入核心（`BluetoothProvider` 仍在 Swift 里解析系统 JSON）。
-      要统一需要给 `battbar-core::bluetooth` 加 key/value 风格的 C ABI。
+- [x] 蓝牙规则接入核心（2026-10-27）：`BluetoothProvider` 只负责跑 `system_profiler` 和走 JSON 结构，
+      属性选择 / 充电解析 / 鼠标识别 / 稳定 ID 全部走 C ABI。
+- [x] 低电量去重接入核心：`NotificationService` 只负责发通知和文案，阈值与状态由核心维护。
+- [x] 设备合并/保留/排序/当前选中策略接入核心（`core/battbar-core/src/merge.rs`），
+      `AppModel.apply` 只重建模型对象。
+- [x] 删掉 Swift 里最后一处重复工具函数 `normalizedBattery`。
 - [ ] 真机验证后再删除 Swift/JS 里的重复协议实现。
 - [ ] 补齐 `bluetooth` 的 Swift 对拍覆盖面（目前 Swift 侧只覆盖 ATK / Razer / 蓝牙属性）。
 
