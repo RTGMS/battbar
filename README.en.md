@@ -145,7 +145,7 @@ Protocol notes:
 
 ### Hardware probe
 
-A standalone cross-platform HID probe (Windows / macOS / Linux, Node.js 18+) is included for hardware validation without rebuilding the app:
+A standalone cross-platform HID probe (Windows / macOS / Linux, Node.js 24; CI and the legacy Windows build use 24) is included for hardware validation without rebuilding the app:
 
 ```bash
 npm install
@@ -236,7 +236,7 @@ tools/
 
 ## Windows (legacy Electron build)
 
-The Windows build still uses the original Electron implementation. The ATK protocol matches macOS. Generic Bluetooth battery support depends on Windows PnP battery properties and may not work on every mouse.
+Requires Node.js 24 (the same version used by GitHub Actions). The Windows build still uses the original Electron implementation. The ATK protocol matches macOS. Generic Bluetooth battery support depends on Windows PnP battery properties and may not work on every mouse.
 
 ```bash
 npm install

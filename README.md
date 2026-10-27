@@ -145,7 +145,7 @@ Sources/Providers/
 
 ### 硬件验证工具
 
-不依赖原生 App 的跨平台 HID 探针（Windows / macOS / Linux，需要 Node.js 18+）：
+不依赖原生 App 的跨平台 HID 探针（Windows / macOS / Linux，需要 Node.js 24；CI 与 Windows 旧版构建也使用 24）：
 
 ```bash
 npm install
@@ -236,7 +236,7 @@ tools/
 
 ## Windows（旧 Electron 版）
 
-Windows 版本仍使用原来的 Electron 实现，ATK 协议与 macOS 一致；通用蓝牙电量依赖 Windows PnP 电池属性，部分设备可能不暴露。
+要求 Node.js 24（与 GitHub Actions 一致）。Windows 版本仍使用原来的 Electron 实现，ATK 协议与 macOS 一致；通用蓝牙电量依赖 Windows PnP 电池属性，部分设备可能不暴露。
 
 ```bash
 npm install
