@@ -68,6 +68,48 @@ jobs:
       - name: cargo test (native)
         run: cargo test --manifest-path core/Cargo.toml
 
+  windows-native:
+    name: Windows native (C# + Rust core)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build the Rust core (DLL)
+        run: cargo build --manifest-path core/Cargo.toml -p battbar-ffi --release --target x86_64-pc-windows-msvc
+
+      - name: Core tests
+        run: cargo test --manifest-path core/Cargo.toml
+
+      - name: Publish the tray app
+        run: >
+          dotnet publish windows/BattBar.Windows/BattBar.Windows.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o release/win
+
+      - name: Smoke check the bundle
+        shell: pwsh
+        run: |
+          $exe = "release/win/BattBar.exe"
+          if (-not (Test-Path $exe)) { throw "缺少 $exe" }
+          Get-ChildItem release/win | Select-Object Name, Length
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattBar-Windows-native
+          path: release/win/**
+          if-no-files-found: error
+
   macos-native:
     name: macOS native (universal)
     runs-on: macos-14

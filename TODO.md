@@ -237,110 +237,43 @@ x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用
 
 <a id="p0-windows-原生版"></a>
 <a id="p0-native-windows-app"></a>
+<a id="p0-windows-原生版"></a>
+<a id="p0-native-windows-app"></a>
 ## P0 · Windows 原生版 / Native Windows App
 
-### 目标
+### 架构决定
 
-- 原生 Windows 托盘应用，空闲内存目标 **< 40 MB**（争取 < 25 MB）。
-- 支持 ATK / VXE / MAD 2.4G、Razer Viper V3 Pro 2.4G、系统蓝牙鼠标。
-- 单击托盘图标打开电量面板；托盘 tooltip 显示所有设备。
-- 开机启动、低电量通知、刷新间隔、失败保留上次读数。
-- 不要求管理员权限，不联网。
+- **协议核心**：复用 [`core/`](core/README.md)，编译成 `battbar_ffi.dll`，C# 通过 P/Invoke 调用。
+  **所有规则都在 Rust**（组包、解码、换算、设备选择、命名、稳定 ID、合并排序、提醒阈值）。
+- **UI**：C# / .NET 8 + WinForms `NotifyIcon`（原生 Shell 通知区域）。
+- **HID 传输**：C# 直接 P/Invoke SetupAPI + `hid.dll`，不引入 hidapi 的 C 依赖。
 
-### 先要决定的事
+### 已完成（2026-10-27）
 
-- [x] **协议层**：已定 —— 复用 [`core/`](core/README.md) 的 `battbar-core` crate，**不走 FFI**（同语言直接依赖）。
-- [x] **Rust 作 UI 技术栈已确定**（2026-10-27）：与核心同语言、内存可控、可在 macOS 上交叉编译检查。
-      剩下的只是托盘/弹窗库选型，见下。
-- [ ] **托盘库选型**
-  - 方案 A：`tray-icon` + 自绘 Win32 弹窗（egui / 手写 GDI），体积小，样式完全可控。
-  - 方案 B：`tao` + `wry`（WebView2），UI 开发快，但会多一个 WebView 进程，内存不达标风险高。
-  - 方案 C：直接 `windows` crate 调 Win32 API，最小依赖、最低内存，但代码量最大。
-  - 建议：先做 2 天原型，用 `Get-Process` 实测内存后定；**目标是 < 25 MB，WebView2 方案大概率出局**。
-- [ ] **托盘如何显示电量**
-  - Windows 通知区域只支持图标，不支持 macOS 这种“名称 + 电量”文本。
-  - 推荐：托盘图标绘制电量数字/圆环；tooltip 列出 `名称：电量`；点击打开面板显示完整列表。
-  - 备选：始终置顶的小悬浮条（可能影响游戏/全屏，默认关闭）。
-  - 注意：16×16 图标放不下 3 位数字 + 颜色，需要 32px 高清资源并做 Per-Monitor DPI。
-- [ ] **全屏时是否隐藏**
-  - Windows 任务栏本身通常会自动隐藏；是否隐藏托盘图标需要产品决策。
-  - 如实现：检测前台窗口覆盖显示器 + 任务栏自动隐藏状态，再隐藏图标；退出全屏恢复。
-- [ ] **多设备轮播**
-  - 托盘图标每 5.5 秒切换一个设备的电量数字/颜色；tooltip 显示全部。
-  - 不使用 macOS 的上下文字动画（Windows 托盘不支持）。
+- [x] `windows/BattBar.Windows/` C# 工程，`dotnet build` 通过（在 macOS 上交叉编译校验）。
+- [x] `Core.cs` / `CoreBridge.cs`：P/Invoke 与字符串、结构体编组，不含任何判断逻辑。
+- [x] `Hid.cs`：SetupAPI 枚举、`CreateFile` 打开、重叠 I/O 带超时读取、feature report。
+- [x] `Providers.cs`：ATK / Razer 扫描；候选选择与解码全部走 DLL。
+- [x] `BluetoothScanner.cs`：注册表 PnP 电池属性读取，判定规则走 DLL。
+- [x] `TrayApplication.cs`：`NotifyIcon` + 菜单（设备选择、刷新、提醒、开机启动、刷新间隔、退出）。
+- [x] `BatteryIcon.cs`：32×32 图标绘制电量数字，按电量变色。
+- [x] `Settings.cs`（`%APPDATA%\BattBar\settings.json`）、`Autostart.cs`（HKCU Run，免管理员）。
+- [x] 单实例 Mutex；扫描在后台线程，UI 不阻塞。
+- [x] `windows/build.ps1` 一键构建；CI 增加 `windows-native` job。
+- [x] 新增 C ABI：`battbar_atk_select` / `battbar_razer_select`、`battbar_atk_display_name` / `_device_id`、
+      `battbar_razer_display_name` / `_device_id`、`battbar_bluetooth_windows_id`。
 
-### 实现清单
+### 真机待验证（当前没有 Windows 机器）
 
-- [ ] 新建 `windows/` Rust 工程（`cargo` + `windows` crate），依赖 `battbar-core`。
-- [ ] 单实例锁：`CreateMutex` + `FindWindow`，重复启动时唤起已有实例的面板。
-- [ ] HID 传输层：HIDAPI（`hidapi` crate 或直接 `SetupAPI` + `hid.dll`）；封装枚举、open、write、read、feature report。
-- [x] ATK 协议（**已在 `battbar-core` 完成**）
-  - [x] VID `0x373B` / `0x3554`，候选过滤（含 interface fallback 与键盘排除）。
-  - [x] 17 字节写入（report ID `0x08` + 16 字节 payload）。
-  - [x] 解析 battery/charging，自动兼容带/不带 report ID 的读缓冲。
-  - [ ] **真机待测**：Windows HIDAPI 的 read 缓冲到底含不含 report ID。
-- [x] Razer 协议（**已在 `battbar-core` 完成**）
-  - [x] VID `0x1532`，PID `0x00C1` / `0x00B3`。
-  - [x] 90 字节 feature report、CRC、事务 `0x1F`、电量/充电命令。
-  - [x] 91 字节（带前导 report ID）响应自动兼容。
-  - [ ] **真机待测**：`hid_send_feature_report` 用 90 还是 91 字节写入能被接收器接受。
-- [x] Bluetooth 规则（**已在 `battbar-core` 完成**）
-  - [x] PnP 行校验：present 过滤、0–100 范围、鼠标识别。
-  - [ ] 传输层仍需实现：SetupAPI 读 `{104EA319-...} 2` 电池属性，或 WinRT `Windows.Devices.Bluetooth`。
-  - [ ] 记录哪些鼠标型号暴露 battery 属性。
-- [x] 低电量判定（**已在 `battbar-core` 完成**）：20% / 10% 去重、充电后重新武装。
-- [ ] 托盘 UI
-  - [ ] 图标绘制电量数字/颜色；高 DPI 1x/2x 资源。
-  - [ ] tooltip 多设备列表。
-  - [ ] 点击弹出面板（设备列表、刷新、设置、退出）。
-  - [ ] 右键菜单：刷新、低电量提醒、开机启动、退出。
-- [ ] 设置持久化：注册表 `HKCU\Software\BattBar` 或 JSON。
-- [ ] 开机启动：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，不要求管理员。
-- [ ] 低电量通知：Windows Toast（WinRT）或 `NotifyIcon.ShowBalloonTip` 回退；20% / 10% 去重。
-- [ ] 休眠/唤醒、锁屏、Explorer 重启后恢复托盘图标。
-- [ ] 打包：MSIX 或 Inno Setup；卸载器；可选代码签名。
-- [ ] 测试
-  - [ ] ATK 协议测试向量（与 macOS 共用）。
-  - [ ] Razer CRC/解析测试向量。
-  - [ ] 蓝牙 PnP 解析样例。
-  - [ ] UI 冒烟测试、单实例、Explorer 重启。
-- [ ] CI：Windows runner 构建 + 测试 + 产物上传。
-
-### Windows 验证清单（换电脑后）
-
-- [ ] Windows 10/11 版本：`winver`。
-- [ ] 安装旧 Electron 版，确认 ATK 2.4G 是否能读（作为协议对照）。
-- [ ] 插 Razer 接收器，确认设备管理器 / USB 设备能看到 PID。
-- [ ] 运行 `npm run probe:hid`，保存 VID/PID/usage/report descriptor。
-- [ ] 运行 `npm run probe:atk` / `npm run probe:razer`，保存原始 hex。
-- [ ] 如果 `node-hid` 加载失败，确认 64 位 Node，并尝试 `npm rebuild node-hid`。
-- [ ] 原生 Windows 原型完成后，分别测试 ATK、Razer、蓝牙。
-- [ ] 睡眠/唤醒、锁屏、注销、Explorer 重启。
-- [ ] 无管理员权限运行。
-- [ ] 空闲内存/CPU、安装包大小、卸载残留。
-- [ ] 确认没有网络请求。
-
-### Windows 已知问题
-
-- **托盘文本限制**：通知区域不能显示任意文字，这是平台限制，不是实现问题。
-- **HID 独占**：Razer Synapse、ATK HUB、其他 HID 工具可能占用设备；需要友好提示。
-- **Razer feature report**：Windows HIDAPI 与 macOS IOKit 的 report ID 处理不同，必须两种长度都实测。
-- **蓝牙电量**：很多 Windows 鼠标不暴露 PnP battery 属性；应用只能显示“未知”，不能凭空计算。
-- **DPI/多屏**：托盘图标和弹窗需要 Per-Monitor DPI 感知。
-- **代码签名**：未签名安装包会触发 SmartScreen；正式发布建议购买证书。
-- **旧 Electron 版**：只支持 ATK + PnP 蓝牙，不支持 Razer；不要用它判断 Razer 协议是否可用。
-
-### 验收标准
-
-- [ ] ATK 2.4G 在真实 Windows 机器上读到电量。
-- [ ] Razer Viper V3 Pro 2.4G 在真实 Windows 机器上读到电量/充电状态。
-- [ ] 至少一款蓝牙鼠标能显示电量（或明确记录系统不暴露）。
-- [ ] 空闲内存 < 40 MB，CPU 接近 0。
-- [ ] 开机启动、通知、刷新间隔、失败保留读数可用。
-- [ ] 安装/卸载干净，无管理员权限要求，无网络请求。
-- [ ] 通过 24 小时挂机 + 游戏/全屏场景测试。
-
----
+- [ ] `dotnet publish` 产物能在 Windows 10/11 启动，托盘图标出现。
+- [ ] ATK 接收器读到电量；确认 `ReadFile` 缓冲是否带 report id（核心两种都接受）。
+- [ ] **Razer**：feature report 是 90 还是 91 字节写入被接受——目前按 91（前置 report id）实现，
+      被拒时改 `Providers.Exchange`。
+- [ ] 蓝牙：哪些鼠标暴露 PnP 电池属性；不暴露的只能显示"未发现"。
+- [ ] Explorer 重启后图标恢复。
+- [ ] 高 DPI（125%/150%/200%）下图标与菜单。
+- [ ] 空闲内存/CPU 实测（目标 < 40 MB；.NET + WinForms 预计 30–50 MB）。
+- [ ] 无管理员权限运行、卸载残留、开机启动注册与注销。
 
 ## P1 · macOS 剩余收尾
 
@@ -354,17 +287,6 @@ x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用
 - [x] 品牌统一：`BattBar.app` / `com.battbar.app` / `BattBar-*` 产物 / 文档与代码全部更新，旧 Electron 版同步改名（2026-10-27）。
 - [ ] Developer ID 签名 + 公证（需要 Apple Developer 账号）。
 - [x] GitHub Actions：`ci.yml` 改为手动触发（macOS 原生测试/构建/打包 + Windows 旧版测试/构建）；`release.yml` 仅在 tag 发布 DMG/ZIP/EXE + SHA256 + GitHub Release。
-
----
-
-## P2 · Linux
-
-- [ ] UI 方案：GTK4 / Qt / Rust tray；目标内存 < 50 MB。
-- [ ] HID：`hidraw` + `HIDIOCGFEATURE` / `HIDIOCGINPUT`。
-- [ ] ATK report 8、Razer 90 字节 feature report 复用协议文档和测试向量。
-- [ ] 蓝牙：BlueZ D-Bus `org.bluez.Battery1`。
-- [ ] 桌面环境兼容：GNOME / KDE / Xfce 托盘（AppIndicator）。
-- [ ] 打包：AppImage / .deb / Flatpak（注意 hidraw 权限和 udev 规则）。
 
 ---
 

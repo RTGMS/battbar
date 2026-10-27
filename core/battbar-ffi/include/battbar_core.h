@@ -136,6 +136,53 @@ int32_t battbar_razer_decode_battery(const uint8_t *bytes, size_t len,
 int32_t battbar_razer_decode_charging(const uint8_t *bytes, size_t len,
                                       BattbarReading *out);
 
+/* ---- Naming / ids ------------------------------------------------------ */
+
+/** Human-facing name + subtitle for an ATK product string. */
+int32_t battbar_atk_display_name(const char *product, char *out_name, size_t name_len,
+                                 char *out_subtitle, size_t subtitle_len);
+
+/** Stable id for an ATK receiver. */
+int32_t battbar_atk_device_id(uint16_t vendor_id, uint16_t product_id,
+                              const char *serial_number, const char *product,
+                              char *out, size_t out_len);
+
+/** Human-facing name + subtitle for a Razer product string. */
+int32_t battbar_razer_display_name(const char *product, uint16_t product_id,
+                                   char *out_name, size_t name_len,
+                                   char *out_subtitle, size_t subtitle_len);
+
+/** Stable id for a Razer receiver. */
+int32_t battbar_razer_device_id(uint16_t vendor_id, uint16_t product_id,
+                                char *out, size_t out_len);
+
+/* ---- HID enumeration --------------------------------------------------- */
+
+/** One HID collection as the platform layer enumerated it. */
+typedef struct BattbarHidInfo {
+  const char *path;
+  uint16_t vendor_id;
+  uint16_t product_id;
+  const char *product;
+  const char *serial_number;
+  int32_t interface;
+  int32_t usage_page;
+  int32_t usage;
+} BattbarHidInfo;
+
+/**
+ * Select the ATK receivers worth probing.
+ *
+ * `out_indices` receives indices into `devices` (the per-collection list the
+ * platform enumerated). Returns 0 or an error code.
+ */
+int32_t battbar_atk_select(const BattbarHidInfo *devices, int32_t count,
+                           int32_t *out_indices, int32_t capacity, int32_t *out_count);
+
+/** Select the Razer receivers worth probing. Same contract. */
+int32_t battbar_razer_select(const BattbarHidInfo *devices, int32_t count,
+                             int32_t *out_indices, int32_t capacity, int32_t *out_count);
+
 /* ---- Scan merge -------------------------------------------------------- */
 
 /** One device as the merge policy sees it. */
@@ -191,6 +238,15 @@ int32_t battbar_bluetooth_charging(int32_t count, const char *const *keys,
 
 /** 1 when the name / minor type pair looks like a mouse, 0 otherwise. */
 uint8_t battbar_bluetooth_is_likely_mouse(const char *name, const char *minor_type);
+
+/**
+ * Write the stable id for a Windows PnP device into `out`.
+ *
+ * Returns the byte count written (excluding the NUL) or
+ * BATTBAR_ERROR_INVALID_ARGUMENT.
+ */
+int32_t battbar_bluetooth_windows_id(const char *instance_id, const char *name,
+                                     char *out, size_t out_len);
 
 /**
  * Write the stable id for a macOS Bluetooth device into `out`.

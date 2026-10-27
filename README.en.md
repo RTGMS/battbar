@@ -7,7 +7,7 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 **The name**: Batt (battery) + Bar (menu bar / taskbar). The Chinese name is **电量栏**. It is device-agnostic, so keyboards, headsets, and controllers can join later without a rename.
 
-> The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. Native Windows and Linux builds are on the roadmap.
+> The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. A native Windows build is in progress.
 
 ![BattBar native panel](docs/native-panel.png)
 
@@ -162,15 +162,13 @@ Current priority:
 
 1. **Make the native macOS app solid for daily use** (current): low memory, ATK / Razer / Bluetooth, menu bar scrolling and fullscreen hiding, DMG release.
 2. **Build the native Windows app**: HIDAPI transport + native tray UI; the Electron build remains a stopgap.
-3. **Add Linux**: `hidraw` + native tray.
 
-The long-term target is macOS / Windows / Linux, with platform-native UI and HID transports to keep memory low:
+The target is macOS and Windows, with platform-native UI and HID transports to keep memory low (Linux is out of scope):
 
 | Platform | UI | HID transport | Status |
 | --- | --- | --- | --- |
 | macOS | Swift + AppKit | IOKit `IOHIDDevice` | Current |
 | Windows | Native Win32 / .NET tray (TBD) | HIDAPI | Planned; legacy Electron build available |
-| Linux | Native tray (TBD) | `hidraw` + `HIDIOCGFEATURE` | Planned |
 
 Packet layouts, checksums, battery scaling, and test vectors stay platform-independent. The Electron code remains as the Windows stopgap and as a reference implementation; it is no longer the macOS release.
 

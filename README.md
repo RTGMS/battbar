@@ -7,7 +7,7 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 **名字**：Batt（battery，电量）+ Bar（菜单栏 / 任务栏）；中文名「电量栏」。不限定设备类型，以后接键盘、耳机、手柄也不用改名。
 
-> macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows / Linux 原生版仍在路线图中。
+> macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows 原生版正在开发中。
 
 ![BattBar 原生面板](docs/native-panel.png)
 
@@ -183,15 +183,13 @@ npm run probe:razer    # 发送 Razer 90 字节 feature report，打印原始应
 
 1. **先把 macOS 原生版打磨到可日常使用**（当前）：低内存、ATK / Razer / 蓝牙、菜单栏滚动与全屏隐藏、DMG 发布。
 2. **再做 Windows 原生版**：HIDAPI 传输层 + 原生托盘 UI；现有 Electron 版先作为过渡。
-3. **最后补 Linux**：`hidraw` + 原生托盘。
 
-最终目标是 macOS / Windows / Linux 三平台，但 **UI 按平台落地，协议核心共用一份 Rust 实现**：
+目标是 macOS 与 Windows 两个平台，**UI 按平台落地，协议核心共用一份 Rust 实现**（Linux 不在计划内）：
 
 | 平台 | UI | HID 传输 | 协议核心 | 状态 |
 | --- | --- | --- | --- | --- |
 | macOS | Swift + AppKit | IOKit `IOHIDDevice` | `core/`（静态库，经 C ABI 链接） | 当前版本 |
-| Windows | 原生托盘（待定） | HIDAPI | `core/`（Rust crate 直接依赖） | 计划中；旧 Electron 版可先用 |
-| Linux | 原生托盘（待定） | `hidraw` + `HIDIOCGFEATURE` | `core/` | 计划中 |
+| Windows | C# / .NET 8 + WinForms `NotifyIcon` | SetupAPI + `hid.dll` | `core/`（编译为 `battbar_ffi.dll`，P/Invoke） | 开发中，未真机验证 |
 
 **规则全部在 Rust，Swift 只负责 UI 和系统调用。** 协议、电量判定、设备识别、排序策略、
 低电量去重都收拢在 [`core/`](core/README.md)：一份实现，`#![forbid(unsafe_code)]`、零运行时依赖。
@@ -214,6 +212,32 @@ node core/scripts/crosscheck.mjs
 
 `core/vectors/vectors.json` 是协议的单一事实来源，Rust、现有 Swift、现有 JavaScript
 三方都用它回放；任何一方行为漂移都会让检查失败。详见 [core/README.md](core/README.md)。
+
+## Windows 开发
+
+要求：Windows 10/11、Rust（含 `x86_64-pc-windows-msvc` 目标）、.NET 8 SDK。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\build.ps1
+```
+
+脚本会先把 Rust 核心编成 `battbar_ffi.dll`，再发布单文件 `BattBar.exe` 到 `release\win\`。
+
+工程结构（产物在 `windows/BattBar.Windows/`）：
+
+| 文件 | 职责 |
+| --- | --- |
+| `Program.cs` | 单实例 Mutex、启动 |
+| `TrayApplication.cs` | 托盘图标、右键菜单、定时扫描 |
+| `Core.cs` / `CoreBridge.cs` | 对 `battbar_ffi.dll` 的 P/Invoke 与编组，**不含判断逻辑** |
+| `Hid.cs` | SetupAPI 枚举、重叠 I/O 读写、feature report |
+| `Providers.cs` | ATK / Razer 扫描，候选与解码走 DLL |
+| `BluetoothScanner.cs` | 注册表 PnP 电池属性 |
+| `BatteryIcon.cs` | 图标绘制 |
+| `Settings.cs` / `Autostart.cs` | 设置持久化、开机启动 |
+
+**所有协议与判定规则仍在 Rust 核心**；C# 只负责 OS 调用与界面。
+当前状态：`dotnet build` 通过，但还没有在真实 Windows 机器上运行过，清单见 [TODO.md](TODO.md#p0-windows-原生版)。
 
 ## macOS 开发
 

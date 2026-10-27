@@ -275,6 +275,130 @@ pub unsafe extern "C" fn battbar_razer_decode_charging(
     }
 }
 
+// ---- HID enumeration ---------------------------------------------------
+
+/// One HID collection as the platform layer enumerated it.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BattbarHidInfo {
+    /// Device path (NUL-terminated).
+    pub path: *const std::os::raw::c_char,
+    pub vendor_id: u16,
+    pub product_id: u16,
+    /// Product string, or null.
+    pub product: *const std::os::raw::c_char,
+    /// Serial number, or null.
+    pub serial_number: *const std::os::raw::c_char,
+    /// Interface number, or -1 when the OS does not report one.
+    pub interface: i32,
+    /// Usage page, or -1 when unknown.
+    pub usage_page: i32,
+    /// Usage, or -1 when unknown.
+    pub usage: i32,
+}
+
+fn hid_info_from(entry: &BattbarHidInfo) -> battbar_core::HidDeviceInfo {
+    // SAFETY: the caller guarantees valid strings or null.
+    let path = unsafe { c_str_or_empty(entry.path) }.to_string();
+    let product = unsafe { c_str_or_empty(entry.product) };
+    let serial = unsafe { c_str_or_empty(entry.serial_number) };
+    battbar_core::HidDeviceInfo {
+        path,
+        vendor_id: entry.vendor_id,
+        product_id: entry.product_id,
+        product: (!product.is_empty()).then(|| product.to_string()),
+        serial_number: (!serial.is_empty()).then(|| serial.to_string()),
+        interface: (entry.interface >= 0).then_some(entry.interface),
+        usage_page: (entry.usage_page >= 0).then_some(entry.usage_page as u16),
+        usage: (entry.usage >= 0).then_some(entry.usage as u16),
+    }
+}
+
+/// Select the ATK receivers worth probing.
+///
+/// Takes the per-collection list the platform enumerated (the hidapi shape) and
+/// returns indices into it, so the caller keeps ownership of its own data.
+///
+/// # Safety
+/// `devices` must hold `count` entries; `out_indices` `capacity` slots.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_atk_select(
+    devices: *const BattbarHidInfo,
+    count: i32,
+    out_indices: *mut i32,
+    capacity: i32,
+    out_count: *mut i32,
+) -> i32 {
+    unsafe { select(devices, count, out_indices, capacity, out_count, false) }
+}
+
+/// Select the Razer receivers worth probing. Same contract as
+/// [`battbar_atk_select`].
+///
+/// # Safety
+/// Same as [`battbar_atk_select`].
+#[no_mangle]
+pub unsafe extern "C" fn battbar_razer_select(
+    devices: *const BattbarHidInfo,
+    count: i32,
+    out_indices: *mut i32,
+    capacity: i32,
+    out_count: *mut i32,
+) -> i32 {
+    unsafe { select(devices, count, out_indices, capacity, out_count, true) }
+}
+
+unsafe fn select(
+    devices: *const BattbarHidInfo,
+    count: i32,
+    out_indices: *mut i32,
+    capacity: i32,
+    out_count: *mut i32,
+    razer: bool,
+) -> i32 {
+    if count < 0 || capacity < 0 || out_indices.is_null() || out_count.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    if count > 0 && devices.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+
+    let mut owned = Vec::with_capacity(count as usize);
+    for index in 0..count as usize {
+        // SAFETY: the caller guarantees `count` readable entries.
+        owned.push(hid_info_from(unsafe { &*devices.add(index) }));
+    }
+
+    let picked: Vec<usize> = if razer {
+        owned
+            .iter()
+            .enumerate()
+            .filter(|(_, device)| battbar_core::razer::is_candidate(device))
+            .map(|(index, _)| index)
+            .collect()
+    } else {
+        // The core returns references; map them back to indices.
+        battbar_core::atk::find_candidates(&owned)
+            .into_iter()
+            .filter_map(|candidate| {
+                owned
+                    .iter()
+                    .position(|device| std::ptr::eq(device, candidate))
+            })
+            .collect()
+    };
+
+    let written = picked.len().min(capacity as usize);
+    // SAFETY: the caller provides `capacity` writable slots.
+    let out = unsafe { std::slice::from_raw_parts_mut(out_indices, written) };
+    for (slot, index) in out.iter_mut().zip(picked.iter()) {
+        *slot = *index as i32;
+    }
+    // SAFETY: validated non-null above.
+    unsafe { *out_count = written as i32 };
+    0
+}
+
 // ---- Scan merge --------------------------------------------------------
 
 /// One device as the merge policy sees it.
@@ -407,6 +531,115 @@ pub unsafe extern "C" fn battbar_merge_scan(
         *out_active = active.map_or(-1, |index| index as i32);
     }
     0
+}
+
+/// Write `text` into a NUL-terminated UTF-8 buffer.
+///
+/// # Safety
+/// `out` must be valid for writes of `out_len` bytes.
+unsafe fn write_string(text: &str, out: *mut std::os::raw::c_char, out_len: usize) -> i32 {
+    if out.is_null() || out_len == 0 {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    let bytes = text.as_bytes();
+    if bytes.len() + 1 > out_len {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    // SAFETY: length checked above.
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), bytes.len());
+        *out.add(bytes.len()) = 0;
+    }
+    bytes.len() as i32
+}
+
+/// Human-facing name and subtitle for an ATK product string.
+///
+/// # Safety
+/// Output buffers must be valid for their advertised lengths.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_atk_display_name(
+    product: *const std::os::raw::c_char,
+    out_name: *mut std::os::raw::c_char,
+    name_len: usize,
+    out_subtitle: *mut std::os::raw::c_char,
+    subtitle_len: usize,
+) -> i32 {
+    let product = unsafe { c_str_or_empty(product) };
+    let display = atk::make_display_name(product);
+    let written = unsafe { write_string(&display.name, out_name, name_len) };
+    if written < 0 {
+        return written;
+    }
+    unsafe { write_string(&display.subtitle, out_subtitle, subtitle_len) }
+}
+
+/// Stable id for an ATK receiver.
+///
+/// # Safety
+/// Output buffer must be valid for `out_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_atk_device_id(
+    vendor_id: u16,
+    product_id: u16,
+    serial_number: *const std::os::raw::c_char,
+    product: *const std::os::raw::c_char,
+    out: *mut std::os::raw::c_char,
+    out_len: usize,
+) -> i32 {
+    let serial = unsafe { c_str_or_empty(serial_number) };
+    let product = unsafe { c_str_or_empty(product) };
+    let device = battbar_core::HidDeviceInfo {
+        vendor_id,
+        product_id,
+        serial_number: (!serial.is_empty()).then(|| serial.to_string()),
+        product: (!product.is_empty()).then(|| product.to_string()),
+        ..Default::default()
+    };
+    let id = atk::stable_device_id(&device);
+    unsafe { write_string(&id, out, out_len) }
+}
+
+/// Human-facing name and subtitle for a Razer product string.
+///
+/// # Safety
+/// Output buffers must be valid for their advertised lengths.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_razer_display_name(
+    product: *const std::os::raw::c_char,
+    product_id: u16,
+    out_name: *mut std::os::raw::c_char,
+    name_len: usize,
+    out_subtitle: *mut std::os::raw::c_char,
+    subtitle_len: usize,
+) -> i32 {
+    let product = unsafe { c_str_or_empty(product) };
+    let display = razer::make_display_name(product, product_id);
+    let written = unsafe { write_string(&display.name, out_name, name_len) };
+    if written < 0 {
+        return written;
+    }
+    unsafe { write_string(&display.subtitle, out_subtitle, subtitle_len) }
+}
+
+/// Stable id for a Razer receiver.
+///
+/// # Safety
+/// Output buffer must be valid for `out_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_razer_device_id(
+    vendor_id: u16,
+    product_id: u16,
+    out: *mut std::os::raw::c_char,
+    out_len: usize,
+) -> i32 {
+    let device = battbar_core::HidDeviceInfo {
+        vendor_id,
+        product_id,
+        ..Default::default()
+    };
+    let id = razer::stable_device_id(&device);
+    unsafe { write_string(&id, out, out_len) }
 }
 
 // ---- Bluetooth ---------------------------------------------------------
@@ -645,6 +878,42 @@ fn to_summaries<'a>(
             })
         })
         .collect()
+}
+
+/// Write the stable id for a Windows PnP device into `out`.
+///
+/// Returns the number of bytes written (excluding the NUL) or
+/// [`status::ERROR_INVALID_ARGUMENT`] when the buffer is too small.
+///
+/// # Safety
+/// `out` must be valid for writes of `out_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_bluetooth_windows_id(
+    instance_id: *const std::os::raw::c_char,
+    name: *const std::os::raw::c_char,
+    out: *mut std::os::raw::c_char,
+    out_len: usize,
+) -> i32 {
+    if out.is_null() || out_len == 0 {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    let instance = unsafe { c_str_or_empty(instance_id) };
+    let name = unsafe { c_str_or_empty(name) };
+    let id = battbar_core::bluetooth::windows_device_id(if instance.is_empty() {
+        name
+    } else {
+        instance
+    });
+    let bytes = id.as_bytes();
+    if bytes.len() + 1 > out_len {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    // SAFETY: length checked above.
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), bytes.len());
+        *out.add(bytes.len()) = 0;
+    }
+    bytes.len() as i32
 }
 
 /// Collect parallel key/value arrays into borrowed pairs.

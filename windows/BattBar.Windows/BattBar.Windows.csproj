@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>BattBar</AssemblyName>
+    <RootNamespace>BattBar</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+    <!-- Allows `dotnet build` on macOS/Linux for compile checks. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- The protocol core is a Rust DLL (core/battbar-ffi). CI builds it for
+       win-x64 and drops it next to the executable as battbar_ffi.dll. -->
+  <ItemGroup>
+    <None Include="..\..\core\target\x86_64-pc-windows-msvc\release\battbar_ffi.dll"
+          Condition="Exists('..\..\core\target\x86_64-pc-windows-msvc\release\battbar_ffi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>battbar_ffi.dll</Link>
+    </None>
+  </ItemGroup>
+
+</Project>

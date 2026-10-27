@@ -84,3 +84,8 @@ release/
 # Rust core build output / local toolchain caches
 core/target/
 core/.cargo-cache/
+
+# C# / .NET
+windows/**/bin/
+windows/**/obj/
+*.user
