@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小鼠电量</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="window-shell" tabindex="-1">
+      <div class="ambient ambient-a"></div>
+      <div class="ambient ambient-b"></div>
+
+      <header class="titlebar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3.6c4.35 0 6.75 3.03 6.75 7.45v2.55c0 4.5-2.66 6.8-6.75 6.8s-6.75-2.3-6.75-6.8v-2.55C5.25 6.63 7.65 3.6 12 3.6Z"
+                fill="currentColor"
+                opacity=".16"
+              />
+              <path
+                d="M12 3.9c4.1 0 6.35 2.9 6.35 7.15v2.55c0 4.28-2.5 6.5-6.35 6.5s-6.35-2.22-6.35-6.5v-2.55C5.65 6.8 7.9 3.9 12 3.9Z"
+                stroke="currentColor"
+                stroke-width="1.35"
+              />
+              <path d="M12 4v6.1" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+              <rect x="10.7" y="5.4" width="2.6" height="4.5" rx="1.3" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="brand-copy">
+            <span class="brand-name">小鼠电量</span>
+            <span class="brand-mark">MOUSE BATTERY</span>
+          </div>
+        </div>
+
+        <div class="window-actions">
+          <button class="icon-button" id="pinButton" type="button" title="固定在最前" aria-label="固定在最前" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m9 4 6 0" />
+              <path d="M10 4v5l-2.2 2.2a1 1 0 0 0-.3.7V14h9v-2.1a1 1 0 0 0-.3-.7L14 9V4" />
+              <path d="M12 14v6" />
+            </svg>
+          </button>
+          <button class="icon-button" id="settingsButton" type="button" title="设置" aria-label="设置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3.1" />
+              <path d="M19.1 13.6a7.8 7.8 0 0 0 0-3.2l2-1.55-2-3.46-2.45 1a7.7 7.7 0 0 0-2.75-1.6L13.55 2h-4l-.38 2.79a7.7 7.7 0 0 0-2.75 1.6l-2.45-1-2 3.46 2 1.55a7.8 7.8 0 0 0 0 3.2l-2 1.55 2 3.46 2.45-1a7.7 7.7 0 0 0 2.75 1.6L9.55 22h4l.38-2.79a7.7 7.7 0 0 0 2.75-1.6l2.45 1 2-3.46-2.03-1.55Z" />
+            </svg>
+          </button>
+          <button class="icon-button close-button" id="closeButton" type="button" title="收起到菜单栏" aria-label="收起到菜单栏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="main-scroll" id="mainScroll">
+        <section class="dashboard" id="dashboardView" aria-live="polite">
+          <div class="loading-state" id="loadingState">
+            <div class="radar" aria-hidden="true">
+              <span class="radar-ring radar-ring-a"></span>
+              <span class="radar-ring radar-ring-b"></span>
+              <span class="radar-core">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                  <path d="M12 4.2c3.85 0 5.95 2.85 5.95 6.8v2.6c0 4.0-2.28 6.2-5.95 6.2s-5.95-2.2-5.95-6.2V11c0-3.95 2.1-6.8 5.95-6.8Z" />
+                  <path d="M12 4.4v5.3" />
+                  <rect x="10.9" y="5.6" width="2.2" height="3.9" rx="1.1" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+            </div>
+            <h2>正在寻找你的鼠标</h2>
+            <p>自动读取 ATK 接收器与系统蓝牙设备…</p>
+          </div>
+
+          <div class="empty-state" id="emptyState" hidden>
+            <div class="empty-art" aria-hidden="true">
+              <span class="empty-orbit"></span>
+              <svg viewBox="0 0 120 120" fill="none">
+                <path
+                  d="M60 18c23 0 35 16.8 35 40v16c0 23.4-13.4 35-35 35S25 97.4 25 74V58c0-23.2 12-40 35-40Z"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                />
+                <path d="M60 19v32" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                <rect x="52" y="26" width="16" height="24" rx="8" stroke="currentColor" stroke-width="2.2" />
+                <path d="M43 105h34" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity=".4" />
+              </svg>
+            </div>
+            <h2>没有找到鼠标</h2>
+            <p>把 ATK 接收器插好，或先在系统设置中连接蓝牙鼠标。</p>
+            <button class="primary-button" id="emptyRefreshButton" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 0 0-14.9-4M4 5v5h5" />
+                <path d="M4 13a8 8 0 0 0 14.9 4M20 19v-5h-5" />
+              </svg>
+              重新扫描
+            </button>
+            <div class="error-banner empty-error" id="emptyError" hidden>
+              <span class="error-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                  <path d="M12 8v5.2M12 16.6v.1" />
+                  <path d="M10.2 3.8 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.8 3.8a2 2 0 0 0-3.6 0Z" />
+                </svg>
+              </span>
+              <div class="error-copy">
+                <strong>读取提示</strong>
+                <span id="emptyErrorText"></span>
+              </div>
+            </div>
+            <div class="empty-tips">
+              <span>支持 ATK / VXE 2.4G 接收器</span>
+              <span class="tip-dot"></span>
+              <span>蓝牙鼠标自动识别</span>
+            </div>
+          </div>
+
+          <div class="device-view" id="deviceView" hidden>
+            <div class="device-heading">
+              <div class="device-title">
+                <span class="eyebrow">当前鼠标</span>
+                <h1 id="deviceName">ATK 无线鼠标</h1>
+              </div>
+              <span class="connection-chip" id="connectionChip">
+                <span class="status-dot"></span>
+                <span id="connectionChipText">2.4 GHz</span>
+              </span>
+            </div>
+
+            <section class="hero-card" aria-labelledby="batteryLabel">
+              <div class="hero-ornament" aria-hidden="true">
+                <svg viewBox="0 0 200 240" fill="none">
+                  <path
+                    d="M100 20c44 0 66 31 66 77v44c0 45-25.8 66-66 66s-66-21-66-66v-44c0-46 22-77 66-77Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path d="M100 21v80" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <rect x="86" y="38" width="28" height="45" rx="14" stroke="currentColor" stroke-width="2" />
+                </svg>
+              </div>
+
+              <div class="gauge" id="batteryLabel">
+                <svg viewBox="0 0 160 160" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="ringGradient" x1="20" y1="20" x2="144" y2="144" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="var(--accent-bright)" />
+                      <stop offset="1" stop-color="var(--accent)" />
+                    </linearGradient>
+                  </defs>
+                  <circle class="gauge-track" cx="80" cy="80" r="65" />
+                  <circle class="gauge-progress" id="gaugeProgress" cx="80" cy="80" r="65" />
+                  <circle class="gauge-tick gauge-tick-1" cx="80" cy="80" r="74" />
+                  <circle class="gauge-tick gauge-tick-2" cx="80" cy="80" r="74" />
+                </svg>
+                <div class="gauge-center">
+                  <div class="percent-line">
+                    <span class="percent-value" id="percentValue">--</span>
+                    <span class="percent-unit">%</span>
+                  </div>
+                  <span class="percent-label" id="percentLabel">剩余电量</span>
+                </div>
+              </div>
+
+              <div class="hero-copy">
+                <span class="hero-kicker" id="heroKicker">状态良好</span>
+                <h2 id="batteryHeadline">电量充足</h2>
+                <p id="batteryMessage">电量健康，放心继续使用。</p>
+                <div class="hero-meta">
+                  <span class="meta-line"></span>
+                  <span id="heroMeta">ATK HID · 2.4 GHz</span>
+                </div>
+              </div>
+            </section>
+
+            <div class="metrics" role="list">
+              <div class="metric" role="listitem">
+                <span class="metric-label">连接方式</span>
+                <strong class="metric-value" id="metricConnection">2.4 GHz</strong>
+              </div>
+              <div class="metric" role="listitem">
+                <span class="metric-label">电源状态</span>
+                <strong class="metric-value" id="metricCharging">使用中</strong>
+              </div>
+              <div class="metric" role="listitem">
+                <span class="metric-label">数据来源</span>
+                <strong class="metric-value" id="metricSource">ATK HID</strong>
+              </div>
+            </div>
+
+            <div class="refresh-row">
+              <span class="updated-at" id="updatedAt">刚刚更新</span>
+              <button class="refresh-button" id="refreshButton" type="button">
+                <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 11a8 8 0 0 0-14.9-4M4 5v5h5" />
+                  <path d="M4 13a8 8 0 0 0 14.9 4M20 19v-5h-5" />
+                </svg>
+                <span>重新读取</span>
+              </button>
+            </div>
+
+            <section class="devices-section" id="devicesSection" hidden>
+              <div class="section-heading">
+                <span>已发现的设备</span>
+                <span class="device-count" id="deviceCount">1</span>
+              </div>
+              <div class="device-list" id="deviceList"></div>
+            </section>
+
+            <div class="error-banner" id="errorBanner" hidden>
+              <span class="error-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                  <path d="M12 8v5.2M12 16.6v.1" />
+                  <path d="M10.2 3.8 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.8 3.8a2 2 0 0 0-3.6 0Z" />
+                </svg>
+              </span>
+              <div class="error-copy">
+                <strong id="errorTitle">读取提醒</strong>
+                <span id="errorText"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-view" id="settingsView" hidden>
+          <div class="settings-heading">
+            <button class="back-button" id="backButton" type="button" aria-label="返回">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m14.5 5-7 7 7 7" />
+              </svg>
+            </button>
+            <div>
+              <span class="eyebrow">偏好设置</span>
+              <h1>让它更合你意</h1>
+            </div>
+          </div>
+
+          <section class="settings-group">
+            <div class="group-heading">
+              <span>刷新频率</span>
+              <small>自动读取电量</small>
+            </div>
+            <div class="segmented" id="refreshSegments" role="group" aria-label="自动刷新频率">
+              <button type="button" data-interval="30">30 秒</button>
+              <button type="button" data-interval="60">1 分钟</button>
+              <button type="button" data-interval="300">5 分钟</button>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <div class="switch-row">
+              <div class="switch-copy">
+                <span>低电量提醒</span>
+                <small>电量降至 20% 和 10% 时通知</small>
+              </div>
+              <button class="switch" id="alertSwitch" type="button" role="switch" aria-checked="true" aria-label="低电量提醒">
+                <span></span>
+              </button>
+            </div>
+            <div class="divider"></div>
+            <div class="switch-row" id="autoLaunchRow">
+              <div class="switch-copy">
+                <span>开机自动启动</span>
+                <small id="autoLaunchHint">安静地待在菜单栏</small>
+              </div>
+              <button class="switch" id="autoLaunchSwitch" type="button" role="switch" aria-checked="false" aria-label="开机自动启动">
+                <span></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-group">
+            <div class="group-heading">
+              <span>诊断与支持</span>
+              <small>只在本机处理</small>
+            </div>
+            <div class="action-list">
+              <button class="action-row" id="copyDiagnosticsButton" type="button">
+                <span class="action-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="8" y="8" width="11" height="12" rx="2.5" />
+                    <path d="M15.5 8V6.5A2.5 2.5 0 0 0 13 4H6.5A2.5 2.5 0 0 0 4 6.5V14a2.5 2.5 0 0 0 2.5 2.5H8" />
+                  </svg>
+                </span>
+                <span class="action-copy"><span>复制诊断信息</span><small>用于排查读取问题</small></span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m9 6 6 6-6 6" /></svg>
+              </button>
+              <button class="action-row" id="openLogsButton" type="button">
+                <span class="action-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h3l2 2h6A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" />
+                  </svg>
+                </span>
+                <span class="action-copy"><span>打开日志文件夹</span><small>查看最近的应用记录</small></span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m9 6 6 6-6 6" /></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="about-card">
+            <div class="about-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3.9c4.1 0 6.35 2.9 6.35 7.15v2.55c0 4.28-2.5 6.5-6.35 6.5s-6.35-2.22-6.35-6.5v-2.55C5.65 6.8 7.9 3.9 12 3.9Z" stroke="currentColor" stroke-width="1.35" />
+                <path d="M12 4v6.1" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
+                <rect x="10.7" y="5.4" width="2.6" height="4.5" rx="1.3" fill="currentColor" />
+              </svg>
+            </div>
+            <div class="about-copy">
+              <strong>小鼠电量 <span id="versionText">1.0.0</span></strong>
+              <p>已适配 ATK 2.4G 接收器，同时支持系统蓝牙鼠标。</p>
+            </div>
+            <span class="privacy-badge">LOCAL</span>
+          </section>
+
+          <button class="quit-row" id="quitButton" type="button">退出小鼠电量</button>
+          <p class="settings-footnote">电量数据仅在本机读取，不会上传到任何服务器。</p>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <div class="footer-status">
+          <span class="live-dot"></span>
+          <span id="autoRefreshText">每分钟自动刷新</span>
+        </div>
+        <span class="footer-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.8 7 9 4.2-1.2 7-4.8 7-9V6l-7-2.5Z" />
+            <path d="m9.2 12.1 1.9 1.9 3.8-4" />
+          </svg>
+          仅本机读取
+        </span>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

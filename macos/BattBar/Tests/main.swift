@@ -1,0 +1,185 @@
+import Foundation
+
+var failures = 0
+var checks = 0
+
+func check(_ condition: Bool, _ message: String) {
+    checks += 1
+    if !condition {
+        failures += 1
+        fputs("FAIL: \(message)\n", stderr)
+    }
+}
+
+func checkEqual<T: Equatable>(_ actual: T, _ expected: T, _ message: String) {
+    check(actual == expected, "\(message) (actual: \(actual), expected: \(expected))")
+}
+
+func bytes(_ hex: String) -> [UInt8] {
+    var result: [UInt8] = []
+    var index = hex.startIndex
+    while index < hex.endIndex {
+        let next = hex.index(index, offsetBy: 2)
+        result.append(UInt8(hex[index..<next], radix: 16)!)
+        index = next
+    }
+    return result
+}
+
+// MARK: ATK
+
+let atkRequest = ATKProtocol.batteryRequest()
+checkEqual(atkRequest.count, 17, "ATK 请求长度包含 report ID")
+checkEqual(Array(atkRequest.prefix(2)), [0x08, 0x04], "ATK 请求头")
+checkEqual(atkRequest.last, 0x49, "ATK 电量请求校验和")
+var atkSum = 0
+for byte in atkRequest.dropLast() { atkSum += Int(byte) }
+checkEqual(atkRequest.last, UInt8((0x55 - (atkSum & 0xff)) & 0xff), "ATK 校验和公式")
+
+let atkSample = bytes("0804000000026401107200000000000060")
+if case .success(let reading)? = ATKProtocol.decode(reportID: 8, bytes: atkSample) {
+    checkEqual(reading.battery, 100, "ATK 电量解析")
+    check(reading.charging, "ATK 充电状态解析")
+} else {
+    check(false, "ATK 正常响应应可解析")
+}
+if case .success(let reading)? = ATKProtocol.decode(reportID: 8, bytes: Array(atkSample.dropFirst())) {
+    checkEqual(reading.battery, 100, "ATK 无 report ID 前缀时也能解析")
+} else {
+    check(false, "ATK 无 report ID 前缀应可解析")
+}
+if case .failure(.invalidStatus(1))? = ATKProtocol.decode(reportID: 8, bytes: [0x04, 0x01, 0, 0, 0, 50, 0]) {
+    check(true, "ATK 状态码解析")
+} else {
+    check(false, "ATK 非零状态码应报错")
+}
+check(ATKProtocol.decode(reportID: 9, bytes: [0x09, 0x04, 0, 0, 0, 50, 0]) == nil, "ATK 忽略其他 report ID")
+checkEqual(normalizedBattery(-5), 0, "电量下限")
+checkEqual(normalizedBattery(250), 100, "电量上限")
+
+// MARK: Razer
+
+let razerBatteryRequest = RazerProtocol.request(
+    commandClass: RazerProtocol.commandClass,
+    commandID: RazerProtocol.batteryCommand
+)
+checkEqual(razerBatteryRequest.count, 90, "Razer 报告长度")
+checkEqual(razerBatteryRequest[1], 0x1F, "Razer 事务 ID")
+checkEqual(razerBatteryRequest[5], 2, "Razer data size")
+checkEqual(razerBatteryRequest[6], 0x07, "Razer command class")
+checkEqual(razerBatteryRequest[7], 0x80, "Razer 电量命令")
+checkEqual(razerBatteryRequest[88], RazerProtocol.crc(razerBatteryRequest), "Razer CRC")
+checkEqual(razerBatteryRequest[88], 0x85, "Razer 电量请求 CRC 向量")
+var expectedCRC: UInt8 = 0
+for index in 2..<88 { expectedCRC ^= razerBatteryRequest[index] }
+checkEqual(razerBatteryRequest[88], expectedCRC, "Razer CRC 为 bytes[2..87] 异或")
+
+var razerResponse = [UInt8](repeating: 0, count: 90)
+razerResponse[0] = 0x02
+razerResponse[1] = 0x1F
+razerResponse[6] = 0x07
+razerResponse[7] = 0x80
+razerResponse[9] = 128
+checkEqual(RazerProtocol.battery(from: razerResponse), 50, "Razer 电量缩放")
+razerResponse[7] = 0x84
+razerResponse[9] = 1
+checkEqual(RazerProtocol.charging(from: razerResponse), true, "Razer 充电状态")
+razerResponse[9] = 0
+checkEqual(RazerProtocol.charging(from: razerResponse), false, "Razer 放电状态")
+
+// MARK: Bluetooth
+
+let bluetoothJSON = """
+{
+  "SPBluetoothDataType": [
+    {
+      "device_connected": [
+        {
+          "MX Master 3S": {
+            "device_minorType": "Mouse",
+            "device_batteryLevelMain": "75%",
+            "device_address": "AA-BB-CC-DD-EE-FF",
+            "device_charging": "Yes"
+          },
+          "Magic Keyboard": {
+            "device_minorType": "Keyboard",
+            "device_batteryLevelMain": "90%"
+          },
+          "AirPods Pro": {
+            "device_minorType": "Headphones",
+            "device_batteryLevelMain": "80%"
+          }
+        }
+      ]
+    }
+  ]
+}
+"""
+let bluetoothProvider = BluetoothProvider()
+if let payload = try? JSONSerialization.jsonObject(with: Data(bluetoothJSON.utf8)) as? [String: Any] {
+    let devices = bluetoothProvider.parseBluetoothPayload(payload)
+    checkEqual(devices.count, 1, "蓝牙只保留鼠标")
+    if let device = devices.first {
+        checkEqual(device.battery, 75, "蓝牙电量解析")
+        checkEqual(device.charging, true, "蓝牙充电状态")
+        checkEqual(device.id, "bt-macos:aa-bb-cc-dd-ee-ff", "蓝牙稳定 ID")
+        checkEqual(device.connection, .bluetooth, "蓝牙连接类型")
+    }
+} else {
+    check(false, "蓝牙示例 JSON 应可解析")
+}
+
+let bluetoothObjectJSON = """
+{
+  "SPBluetoothDataType": {
+    "device_connected": {
+      "Razer Viper V3 Pro": {
+        "device_minorType": "Mouse",
+        "device_batteryLevelMain": "35%"
+      }
+    }
+  }
+}
+"""
+if let payload = try? JSONSerialization.jsonObject(with: Data(bluetoothObjectJSON.utf8)) as? [String: Any] {
+    let devices = bluetoothProvider.parseBluetoothPayload(payload)
+    checkEqual(devices.count, 1, "蓝牙 object 形式也能解析")
+    checkEqual(devices.first?.battery, 35, "蓝牙 object 形式电量")
+} else {
+    check(false, "蓝牙 object 示例 JSON 应可解析")
+}
+
+// MARK: Settings
+
+let suite = "mousebattery.tests.\(UUID().uuidString)"
+if let defaults = UserDefaults(suiteName: suite) {
+    defaults.removePersistentDomain(forName: suite)
+    var settings = AppSettings()
+    settings.refreshInterval = 45
+    settings.selectedDeviceID = String(repeating: "x", count: 600)
+    settings.sanitize()
+    checkEqual(settings.refreshInterval, 60, "非法刷新间隔回落到 60")
+    checkEqual(settings.selectedDeviceID, nil, "超长设备 ID 被清理")
+
+    let store = SettingsStore(defaults: defaults)
+    store.update { value in
+        value.refreshInterval = 120
+        value.selectedDeviceID = "atk:373b:101a:test"
+        value.lowBatteryAlerts = false
+    }
+    let reloaded = SettingsStore(defaults: defaults)
+    checkEqual(reloaded.settings.refreshInterval, 120, "设置持久化刷新间隔")
+    checkEqual(reloaded.settings.selectedDeviceID, "atk:373b:101a:test", "设置持久化设备 ID")
+    checkEqual(reloaded.settings.lowBatteryAlerts, false, "设置持久化提醒开关")
+    defaults.removePersistentDomain(forName: suite)
+} else {
+    check(false, "无法创建测试 UserDefaults")
+}
+
+if failures == 0 {
+    print("PASS \(checks) checks")
+    exit(0)
+} else {
+    print("FAILED \(failures)/\(checks) checks")
+    exit(1)
+}
