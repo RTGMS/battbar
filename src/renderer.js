@@ -409,7 +409,7 @@ function renderSettings() {
     ? '安静地待在菜单栏'
     : '安装版中可用';
   elements.autoLaunchSwitch.title = launchSupported ? '开机自动启动' : '安装版中可用';
-  elements.versionText.textContent = `v${currentState.version || '2.1.0'}`;
+  elements.versionText.textContent = `v${currentState.version || '2.2.0'}`;
 }
 
 function renderPin() {

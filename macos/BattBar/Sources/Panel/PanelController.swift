@@ -21,7 +21,7 @@ final class PanelController: NSObject, NSPopoverDelegate {
         popover.animates = false
         popover.appearance = NSAppearance(named: .darkAqua)
         popover.delegate = self
-        popover.contentSize = NSSize(width: 372, height: 600)
+        popover.contentSize = NSSize(width: 372, height: 560)
     }
 
     var isShown: Bool { popover.isShown }
@@ -39,11 +39,11 @@ final class PanelController: NSObject, NSPopoverDelegate {
         generation += 1
         let root = PanelView(model: model, actions: actions)
         let hosting = NSHostingController(rootView: root)
-        hosting.view.frame = NSRect(x: 0, y: 0, width: 372, height: 600)
+        hosting.view.frame = NSRect(x: 0, y: 0, width: 372, height: 560)
         hosting.view.wantsLayer = true
-        hosting.view.layer?.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.050, blue: 0.038, alpha: 1).cgColor
+        hosting.view.layer?.backgroundColor = NSColor(calibratedRed: 0.030, green: 0.038, blue: 0.030, alpha: 1).cgColor
         popover.contentViewController = hosting
-        popover.contentSize = NSSize(width: 372, height: 600)
+        popover.contentSize = NSSize(width: 372, height: 560)
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         onVisibilityChanged?(true)

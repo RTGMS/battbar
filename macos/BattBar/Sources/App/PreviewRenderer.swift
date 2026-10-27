@@ -137,7 +137,9 @@ enum PreviewRenderer {
     }
 
     private static func renderPanel(to url: URL) throws {
-        let model = AppModel(settingsStore: SettingsStore())
+        let previewDefaults = UserDefaults(suiteName: "battbar.preview") ?? .standard
+        previewDefaults.removePersistentDomain(forName: "battbar.preview")
+        let model = AppModel(settingsStore: SettingsStore(defaults: previewDefaults))
         model.apply(ScanOutcome(devices: [previewDevices()[0]], issues: [], timestamp: Date()))
         let actions = PanelActions(
             refresh: {},
@@ -151,8 +153,9 @@ enum PreviewRenderer {
             quit: {}
         )
         print("preview devices=\(model.devices.count) active=\(model.activeDevice?.name ?? "nil")")
-        let hosting = NSHostingView(rootView: PanelView(model: model, actions: actions))
-        hosting.frame = NSRect(x: 0, y: 0, width: 372, height: 600)
+        let showSettings = ProcessInfo.processInfo.environment["BATTBAR_PREVIEW_SETTINGS"] == "1"
+        let hosting = NSHostingView(rootView: PanelView(model: model, actions: actions, initiallyShowingSettings: showSettings))
+        hosting.frame = NSRect(x: 0, y: 0, width: 372, height: 560)
         hosting.layoutSubtreeIfNeeded()
         guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
             throw RenderError.render

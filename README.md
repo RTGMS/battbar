@@ -63,9 +63,9 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 构建产物位于 `release/`：
 
-- macOS（Universal，Apple Silicon + Intel）：`BattBar-2.1.0-mac-universal.dmg`
-- macOS 备用压缩包：`BattBar-2.1.0-mac-universal.zip`
-- Windows（x64，旧 Electron 版）：`BattBar-2.1.0-win-x64.exe`
+- macOS（Universal，Apple Silicon + Intel）：`BattBar-2.2.0-mac-universal.dmg`
+- macOS 备用压缩包：`BattBar-2.2.0-mac-universal.zip`
+- Windows（x64，旧 Electron 版）：`BattBar-2.2.0-win-x64.exe`
 - 校验文件：`SHA256SUMS.txt`
 
 macOS 包内应用名为 `BattBar.app`，在 Finder 中显示为 **BattBar**；下载后拖入「应用程序」即可。

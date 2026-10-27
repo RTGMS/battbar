@@ -118,7 +118,7 @@ final class MenuBarContentView: NSView {
         let nameWidth = Self.textWidth(device.name, font: Self.nameFont)
         let batteryWidth = Self.textWidth(device.menuBatteryText, font: Self.batteryFont)
         // Keep the exact same measurement as the clip rect in draw(device:).
-        let nameArea = max(0, bounds.width - 8 - 18 - batteryWidth)
+        let nameArea = max(0, bounds.width - 8 - 27 - batteryWidth)
         overflow = max(0, nameWidth - nameArea + 1)
     }
 
@@ -126,7 +126,7 @@ final class MenuBarContentView: NSView {
         guard let device = devices.first else { return 126 }
         let nameWidth = min(textWidth(device.name, font: nameFont), 132)
         let batteryWidth = textWidth(device.menuBatteryText, font: batteryFont)
-        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + 5 + 5 + batteryWidth + 8))
+        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + 5 + 12 + batteryWidth + 8))
         return ceil(width)
     }
 
@@ -170,21 +170,21 @@ final class MenuBarContentView: NSView {
         let batterySize = batteryText.size(withAttributes: batteryAttributes)
         let batteryX = bounds.width - 8 - batterySize.width
 
-        let dot = NSBezierPath(ovalIn: NSRect(
-            x: batteryX - 10,
-            y: (bounds.height - 5) / 2 + yOffset - 1,
-            width: 5,
-            height: 5
-        ))
-        dotColor(for: device).withAlphaComponent(alpha).setFill()
-        dot.fill()
+        drawBatteryGlyph(
+            x: batteryX - 17,
+            y: (bounds.height - 6) / 2 + yOffset,
+            fraction: CGFloat(device.battery ?? 0) / 100,
+            color: dotColor(for: device),
+            alpha: alpha,
+            stale: device.isStale
+        )
 
         batteryText.draw(
             at: NSPoint(x: batteryX, y: (bounds.height - batterySize.height) / 2 + yOffset),
             withAttributes: batteryAttributes.merging([.foregroundColor: NSColor.labelColor.withAlphaComponent(alpha)]) { _, new in new }
         )
 
-        let available = max(0, batteryX - 18)
+        let available = max(0, batteryX - 27)
         let nameAttributes: [NSAttributedString.Key: Any] = [
             .font: Self.nameFont,
             .foregroundColor: NSColor.labelColor.withAlphaComponent(alpha),
@@ -204,6 +204,40 @@ final class MenuBarContentView: NSView {
             name.draw(at: NSPoint(x: firstX + width + gap, y: baseY), withAttributes: nameAttributes)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawBatteryGlyph(
+        x: CGFloat,
+        y: CGFloat,
+        fraction: CGFloat,
+        color: NSColor,
+        alpha: CGFloat,
+        stale: Bool
+    ) {
+        let body = NSRect(x: x, y: y, width: 10, height: 6)
+        let outline = NSBezierPath(roundedRect: body, xRadius: 1.4, yRadius: 1.4)
+        outline.lineWidth = 1
+        color.withAlphaComponent(alpha * 0.55).setStroke()
+        outline.stroke()
+
+        let innerWidth = max(0, (body.width - 3) * min(1, max(0, fraction)))
+        if innerWidth > 0 {
+            let fill = NSBezierPath(
+                roundedRect: NSRect(x: body.minX + 1.5, y: body.minY + 1.5, width: innerWidth, height: body.height - 3),
+                xRadius: 0.6,
+                yRadius: 0.6
+            )
+            color.withAlphaComponent(alpha * (stale ? 0.45 : 0.95)).setFill()
+            fill.fill()
+        }
+
+        let cap = NSBezierPath(
+            roundedRect: NSRect(x: body.maxX + 1, y: body.midY - 1.5, width: 1.5, height: 3),
+            xRadius: 0.7,
+            yRadius: 0.7
+        )
+        color.withAlphaComponent(alpha * 0.55).setFill()
+        cap.fill()
     }
 
     private func dotColor(for device: MouseDevice) -> NSColor {
