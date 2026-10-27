@@ -4,13 +4,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE="$(cd "$ROOT/.." && pwd)/release"
-APP="$ROOT/build/小鼠电量.app"
+APP="$ROOT/build/BattBar.app"
 
 # Prefer the version embedded in the built app, then the environment.
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)}"
-VERSION="${VERSION:-2.0.0}"
+VERSION="${VERSION:-2.1.0}"
 VERSION="${VERSION#v}"
-NAME="MouseBattery-$VERSION-mac-universal"
+NAME="BattBar-$VERSION-mac-universal"
 
 if [[ ! -d "$APP" ]]; then
   "$ROOT/scripts/build-native.sh"
@@ -28,7 +28,7 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$RELEASE/$NAME.zip"
 
 echo "创建 DMG …"
 hdiutil create \
-  -volname "小鼠电量" \
+  -volname "BattBar" \
   -srcfolder "$ROOT/build/dmg-stage" \
   -ov -format UDZO \
   "$RELEASE/$NAME.dmg" >/dev/null

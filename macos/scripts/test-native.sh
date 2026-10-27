@@ -7,7 +7,7 @@ SRC="$ROOT/BattBar/Sources"
 BUILD="$ROOT/build"
 mkdir -p "$BUILD" "$BUILD/.cache/clang" "$BUILD/.cache/home"
 
-SDK="${MOUSEBATTERY_SDK:-}"
+SDK="${BATTBAR_SDK:-}"
 if [[ -z "$SDK" ]]; then
   for candidate in \
     /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
@@ -38,7 +38,7 @@ FILES=(
 HOME="$BUILD/.cache/home" swiftc -Onone -g \
   -sdk "$SDK" -target arm64-apple-macos13.0 \
   -module-cache-path "$BUILD/.cache/clang" \
-  "${FILES[@]}" -o "$BUILD/MouseBatteryTests" \
+  "${FILES[@]}" -o "$BUILD/BattBarTests" \
   -framework IOKit -framework Foundation
 
-"$BUILD/MouseBatteryTests"
+"$BUILD/BattBarTests"

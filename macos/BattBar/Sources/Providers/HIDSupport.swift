@@ -27,7 +27,7 @@ final class HIDEnumerationSession {
         IOHIDManagerScheduleWithRunLoop(manager, runLoop, CFRunLoopMode.defaultMode.rawValue)
         let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         if result != kIOReturnSuccess,
-           ProcessInfo.processInfo.environment["MOUSEBATTERY_DEBUG"] == "1" {
+           ProcessInfo.processInfo.environment["BATTBAR_DEBUG"] == "1" {
             // Enumeration still works without a manager-level open on macOS.
             print("[HID] manager open returned \(result)")
         }

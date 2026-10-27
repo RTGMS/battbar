@@ -314,8 +314,8 @@ function renderDevice(device) {
   updateRelativeTime();
   document.title =
     battery === null
-      ? '小鼠电量'
-      : `${device.stale ? '~' : ''}${battery}% · 小鼠电量`;
+      ? '电量栏'
+      : `${device.stale ? '~' : ''}${battery}% · 电量栏`;
 }
 
 function makeDeviceRow(device) {
@@ -409,7 +409,7 @@ function renderSettings() {
     ? '安静地待在菜单栏'
     : '安装版中可用';
   elements.autoLaunchSwitch.title = launchSupported ? '开机自动启动' : '安装版中可用';
-  elements.versionText.textContent = `v${currentState.version || '1.0.0'}`;
+  elements.versionText.textContent = `v${currentState.version || '2.1.0'}`;
 }
 
 function renderPin() {

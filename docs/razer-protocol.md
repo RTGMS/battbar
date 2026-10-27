@@ -124,7 +124,7 @@ IOHIDDeviceGetReport(device,
 插上接收器后运行：
 
 ```bash
-"/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe
+"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe
 ```
 
 会打印发现的设备、电量或错误。若显示 `RAZER_NO_RESPONSE`，通常是鼠标休眠、接收器被雷云占用，或该接收器固件需要不同的事务 ID / report index。

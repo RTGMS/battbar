@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the app, tray and notification icons for MouseBattery."""
+"""Generate the app, tray and notification icons for BattBar."""
 
 from __future__ import annotations
 

@@ -71,7 +71,7 @@ final class NotificationService {
             }
             self.deliver(
                 title: "通知工作正常",
-                body: "小鼠电量会在电量低于 20% 和 10% 时提醒你。",
+                body: "电量栏会在电量低于 20% 和 10% 时提醒你。",
                 identifier: "test-\(UUID().uuidString)"
             ) { success in
                 completion(success)

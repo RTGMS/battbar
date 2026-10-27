@@ -63,7 +63,7 @@ class AppTray {
       ? `${state.appName} · ${active.name} ${active.battery}%${
           active.charging ? '，正在充电' : ''
         }${active.stale ? '，显示上次读数' : ''}`
-      : `${state?.appName || '小鼠电量'} · 未发现鼠标`;
+      : `${state?.appName || '电量栏'} · 未发现鼠标`;
     this.tray.setToolTip(tooltip);
 
     if (process.platform === 'darwin') {
@@ -144,7 +144,7 @@ class AppTray {
         enabled: false,
       },
       { type: 'separator' },
-      { label: '退出小鼠电量', click: () => this.options.onQuit() },
+      { label: '退出电量栏', click: () => this.options.onQuit() },
     );
 
     this.menu = Menu.buildFromTemplate(items);

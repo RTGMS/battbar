@@ -21,18 +21,18 @@ const { compareDevices, scanAll } = require('./providers');
 const { BatteryAlertManager } = require('./battery-alerts');
 const { AppTray } = require('./tray');
 
-const APP_NAME = '小鼠电量';
-const APP_ID = 'com.mousebattery.app';
+const APP_NAME = '电量栏';
+const APP_ID = 'com.battbar.app';
 const WINDOW_WIDTH = 400;
 const WINDOW_HEIGHT = 664;
 const REFRESH_OPTIONS = [30, 60, 300];
 
 app.setName(APP_NAME);
 app.setAppUserModelId(APP_ID);
-const customUserData = process.env.MOUSE_BATTERY_USER_DATA;
+const customUserData = process.env.BATTBAR_USER_DATA;
 app.setPath(
   'userData',
-  customUserData ? path.resolve(customUserData) : path.join(app.getPath('appData'), 'MouseBattery'),
+  customUserData ? path.resolve(customUserData) : path.join(app.getPath('appData'), 'BattBar'),
 );
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();

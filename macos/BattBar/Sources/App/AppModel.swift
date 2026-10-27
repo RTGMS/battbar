@@ -178,7 +178,7 @@ final class AppModel: ObservableObject {
         }
         let issueLines = issues.map { "- \($0.provider.rawValue)/\($0.code): \($0.message) \($0.detail ?? "")" }
         return [
-            "小鼠电量 原生版 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")",
+            "电量栏 原生版 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")",
             "macOS \(ProcessInfo.processInfo.operatingSystemVersionString)",
             "Updated: \(lastUpdated?.description ?? "never")",
             "Attempted: \(lastAttempt?.description ?? "never")",

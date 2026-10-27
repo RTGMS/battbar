@@ -16,7 +16,7 @@ struct AppSettings: Codable, Equatable {
 }
 
 final class SettingsStore {
-    private let key = "mousebattery.settings.v2"
+    private let key = "battbar.settings.v2"
     private let defaults: UserDefaults
     private(set) var settings: AppSettings
 

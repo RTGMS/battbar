@@ -1,6 +1,6 @@
 # BattBar TODO / 待办与硬件验证
 
-更新：2026-10-26
+更新：2026-10-27
 状态图例：`P0` 阻塞发布 · `P1` 重要但不阻塞 · `P2` 后续
 
 当前只剩两类真机验证没有完成：
@@ -26,7 +26,7 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 3. macOS 上验证 Razer：退出 BattBar 后运行原生探针：
 
    ```bash
-   "/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe
+   "/Applications/BattBar.app/Contents/MacOS/BattBar" --probe
    ```
 
 4. 把输出、接收器 VID/PID、系统版本填到文末的[验证记录](#验证记录模板)，发回来即可。
@@ -71,7 +71,7 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 2. 运行原生探针，保存完整输出：
 
    ```bash
-   "/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe | tee ~/battbar-razer-probe.txt
+   "/Applications/BattBar.app/Contents/MacOS/BattBar" --probe | tee ~/battbar-razer-probe.txt
    ```
 
 3. 预期看到类似：
@@ -87,7 +87,7 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 8. 记录内存和 CPU（面板关闭状态）：
 
    ```bash
-   footprint "$(pgrep -x MouseBattery | head -1)"
+   footprint "$(pgrep -x BattBar | head -1)"
    ```
 
 9. 在 [验证记录](#验证记录模板) 中填写结果。
@@ -255,9 +255,9 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 - [ ] 真实全屏 App（游戏/视频/Safari）验证隐藏/恢复，而不只是覆盖窗口。
 - [ ] 蓝牙鼠标真机验证（Magic Mouse / MX Master / 其他）。
 - [ ] 开机启动在 `/Applications` 安装后的真实注册/注销测试。
-- [ ] 通知权限在旧 Electron 版升级到原生版后的迁移测试。
+- [ ] 品牌迁移后重新授权：确认 `com.battbar.app` 的通知权限、开机启动会重新注册。
 - [ ] 英文 UI 本地化（当前面板文案为中文）。
-- [ ] 品牌统一：macOS bundle 改为 `BattBar.app`，保留 `com.mousebattery.app` 以迁移权限；更新登录项、DMG 名称、文档路径。
+- [x] 品牌统一：`BattBar.app` / `com.battbar.app` / `BattBar-*` 产物 / 文档与代码全部更新，旧 Electron 版同步改名（2026-10-27）。
 - [ ] Developer ID 签名 + 公证（需要 Apple Developer 账号）。
 - [x] GitHub Actions：`ci.yml`（macOS 原生测试/构建/打包 + Windows 旧版测试/构建）与 `release.yml`（tag 发布 DMG/ZIP/EXE + SHA256 + GitHub Release）。
 

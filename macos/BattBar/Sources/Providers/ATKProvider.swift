@@ -53,7 +53,7 @@ final class AtkProvider {
 
     private func read(_ descriptor: HIDDeviceDescriptor) throws -> ATKReading {
         let device = descriptor.device
-        let debug = ProcessInfo.processInfo.environment["MOUSEBATTERY_DEBUG"] == "1"
+        let debug = ProcessInfo.processInfo.environment["BATTBAR_DEBUG"] == "1"
         let openResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         if debug { print("[ATK] open \(descriptor.product) page=0x\(String(descriptor.primaryUsagePage, radix: 16)) usage=0x\(String(descriptor.primaryUsage, radix: 16)) -> 0x\(String(openResult, radix: 16))") }
         guard openResult == kIOReturnSuccess else { throw HIDError.openFailed(openResult) }
@@ -74,7 +74,7 @@ final class AtkProvider {
                 guard let context else { return }
                 let state = Unmanaged<ATKReadState>.fromOpaque(context).takeUnretainedValue()
                 let bytes = Array(UnsafeBufferPointer(start: report, count: reportLength))
-                if ProcessInfo.processInfo.environment["MOUSEBATTERY_DEBUG"] == "1" {
+                if ProcessInfo.processInfo.environment["BATTBAR_DEBUG"] == "1" {
                     print("[ATK] report id=\(reportID) len=\(reportLength) hex=\(bytes.prefix(20).map { String(format: "%02x", $0) }.joined())")
                 }
                 state.handle(reportID: Int(reportID), bytes: bytes)

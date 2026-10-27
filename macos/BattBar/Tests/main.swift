@@ -151,7 +151,7 @@ if let payload = try? JSONSerialization.jsonObject(with: Data(bluetoothObjectJSO
 
 // MARK: Settings
 
-let suite = "mousebattery.tests.\(UUID().uuidString)"
+let suite = "battbar.tests.\(UUID().uuidString)"
 if let defaults = UserDefaults(suiteName: suite) {
     defaults.removePersistentDomain(forName: suite)
     var settings = AppSettings()

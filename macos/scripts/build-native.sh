@@ -5,14 +5,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/BattBar/Sources"
 BUILD="$ROOT/build"
-APP="$BUILD/小鼠电量.app"
-VERSION="${VERSION:-2.0.0}"
+APP="$BUILD/BattBar.app"
+VERSION="${VERSION:-2.1.0}"
 VERSION="${VERSION#v}"
-BUNDLE_ID="com.mousebattery.app"
+BUNDLE_ID="com.battbar.app"
 
 choose_sdk() {
-  if [[ -n "${MOUSEBATTERY_SDK:-}" ]]; then
-    printf '%s\n' "$MOUSEBATTERY_SDK"
+  if [[ -n "${BATTBAR_SDK:-}" ]]; then
+    printf '%s\n' "$BATTBAR_SDK"
     return
   fi
   # Prefer a Command Line Tools SDK matching the installed compiler. The
@@ -38,7 +38,7 @@ choose_sdk() {
 SDK="$(choose_sdk)"
 if [[ ! -d "$SDK" ]]; then
   echo "找不到 macOS SDK：$SDK" >&2
-  echo "可以用 MOUSEBATTERY_SDK=/path/to/MacOSX.sdk 指定。" >&2
+  echo "可以用 BATTBAR_SDK=/path/to/MacOSX.sdk 指定。" >&2
   exit 1
 fi
 
@@ -53,7 +53,7 @@ while IFS= read -r file; do SOURCES+=("$file"); done < <(find "$SRC" -name '*.sw
 BINARIES=()
 for arch in $ARCHS; do
   target="$arch-apple-macos$MIN_MACOS"
-  out="$BUILD/.obj-$arch/MouseBattery"
+  out="$BUILD/.obj-$arch/BattBar"
   mkdir -p "$BUILD/.obj-$arch"
   echo "编译 $arch …"
   HOME="$CACHE/home" swiftc -O -whole-module-optimization \
@@ -66,15 +66,15 @@ for arch in $ARCHS; do
 done
 
 if [[ ${#BINARIES[@]} -gt 1 ]]; then
-  lipo -create "${BINARIES[@]}" -output "$BUILD/MouseBattery"
+  lipo -create "${BINARIES[@]}" -output "$BUILD/BattBar"
 else
-  cp "${BINARIES[0]}" "$BUILD/MouseBattery"
+  cp "${BINARIES[0]}" "$BUILD/BattBar"
 fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BUILD/MouseBattery" "$APP/Contents/MacOS/MouseBattery"
-chmod +x "$APP/Contents/MacOS/MouseBattery"
+cp "$BUILD/BattBar" "$APP/Contents/MacOS/BattBar"
+chmod +x "$APP/Contents/MacOS/BattBar"
 
 if [[ -f "$ROOT/../build/icon.icns" ]]; then
   cp "$ROOT/../build/icon.icns" "$APP/Contents/Resources/AppIcon.icns"
@@ -86,19 +86,19 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-  <key>CFBundleDisplayName</key><string>小鼠电量</string>
-  <key>CFBundleExecutable</key><string>MouseBattery</string>
+  <key>CFBundleDisplayName</key><string>BattBar</string>
+  <key>CFBundleExecutable</key><string>BattBar</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>小鼠电量</string>
+  <key>CFBundleName</key><string>BattBar</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleVersion</key><string>3</string>
   <key>LSMinimumSystemVersion</key><string>$MIN_MACOS</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSHumanReadableCopyright</key><string>© 2026 小鼠电量</string>
+  <key>NSHumanReadableCopyright</key><string>© 2026 BattBar</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>
 </plist>
@@ -111,5 +111,5 @@ codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || {
 }
 
 echo "已生成：$APP"
-echo "架构：$(lipo -archs "$APP/Contents/MacOS/MouseBattery")"
+echo "架构：$(lipo -archs "$APP/Contents/MacOS/BattBar")"
 echo "大小：$(du -sh "$APP" | cut -f1)"

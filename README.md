@@ -7,7 +7,7 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 **名字**：Batt（battery，电量）+ Bar（菜单栏 / 任务栏）；中文名「电量栏」。不限定设备类型，以后接键盘、耳机、手柄也不用改名。
 
-> 命名说明：项目英文名为 **BattBar**，中文名为 **电量栏**。当前 macOS 安装包为兼容已安装版本的通知 / 登录项权限，仍显示旧名「小鼠电量」（bundle ID `com.mousebattery.app`）；bundle 品牌迁移见 TODO P1。Windows / Linux 仍在路线图中。
+> macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows / Linux 原生版仍在路线图中。
 
 ![BattBar 原生面板](docs/native-panel.png)
 
@@ -63,17 +63,17 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 构建产物位于 `release/`：
 
-- macOS（Universal，Apple Silicon + Intel）：`MouseBattery-2.0.0-mac-universal.dmg`
-- macOS 备用压缩包：`MouseBattery-2.0.0-mac-universal.zip`
-- Windows（x64，旧 Electron 版）：`MouseBattery-1.0.0-win-x64.exe`
+- macOS（Universal，Apple Silicon + Intel）：`BattBar-2.1.0-mac-universal.dmg`
+- macOS 备用压缩包：`BattBar-2.1.0-mac-universal.zip`
+- Windows（x64，旧 Electron 版）：`BattBar-2.1.0-win-x64.exe`
 - 校验文件：`SHA256SUMS.txt`
 
-> 当前 DMG / App 文件名仍沿用 `MouseBattery` / 「小鼠电量」，原因见上方命名说明。等 macOS bundle 品牌迁移（TODO P1）完成后会统一更新。
+macOS 包内应用名为 `BattBar.app`，在 Finder 中显示为 **BattBar**；下载后拖入「应用程序」即可。
 
 首次打开未签名的 macOS 应用时，请在 Finder 中右键点击应用，选择「打开」。如果仍被 Gatekeeper 拦截：
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/小鼠电量.app"
+xattr -dr com.apple.quarantine "/Applications/BattBar.app"
 ```
 
 Windows 安装包没有购买代码签名证书，SmartScreen 可能提示「未知发布者」；选择「更多信息 → 仍要运行」即可。
@@ -113,7 +113,7 @@ Razer 目标设备：
 - Viper V3 Pro 无线 PID `0x00C1`；HyperPolling 无线接收器 PID `0x00B3`（VID 均为 `0x1532`）。
 - 代码路径、事务 ID、CRC、电量/充电命令均已按 OpenRazer 源码核对；因为手头没有真机，暂标记为实验性。
 - 插上雷蛇接收器后，面板会尝试自动识别；如果读到电量，会显示为「Razer Viper V3 Pro」或「Razer 无线鼠标」。
-- 排查时可运行 `"/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe` 查看原始识别结果。
+- 排查时可运行 `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe` 查看原始识别结果。
 
 ## 如何支持更多设备
 
@@ -183,7 +183,7 @@ cd macos
 
 ./scripts/build-native.sh     # 编译 Universal .app
 ./scripts/test-native.sh      # 协议 / 蓝牙解析 / 设置测试
-open build/小鼠电量.app
+open build/BattBar.app
 
 ./scripts/package-native.sh   # 生成 DMG / ZIP 并刷新 release/SHA256SUMS.txt
 ```
@@ -191,13 +191,13 @@ open build/小鼠电量.app
 构建产物：
 
 ```text
-macos/build/小鼠电量.app
+macos/build/BattBar.app
 ```
 
 脚本会自动选择可用的 Command Line Tools SDK；如果机器上的 SDK 与编译器不匹配，可以手动指定：
 
 ```bash
-MOUSEBATTERY_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+BATTBAR_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
   ./scripts/build-native.sh
 ```
 
@@ -258,7 +258,7 @@ Windows 原生版的设计、限制和验证清单见 [TODO.md](TODO.md#p0-windo
 - 仍无法定位时，在终端运行：
 
 ```bash
-"/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe
+"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe
 ```
 
 **蓝牙鼠标没有出现**
@@ -277,7 +277,7 @@ Windows 原生版的设计、限制和验证清单见 [TODO.md](TODO.md#p0-windo
 
 **低电量通知没有弹出**
 
-- macOS：系统设置 → 通知 →「小鼠电量」，确认允许通知。
+- macOS：系统设置 → 通知 →「BattBar」，确认允许通知。
 - 首次开启提醒时会请求权限；也可以点「发送测试通知」验证。
 
 ## 隐私

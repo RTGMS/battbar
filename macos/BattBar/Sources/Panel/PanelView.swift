@@ -85,10 +85,10 @@ struct PanelView: View {
             .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("小鼠电量")
+                Text("电量栏")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("MOUSE BATTERY")
+                Text("BATTBAR")
                     .font(.system(size: 7, weight: .medium, design: .monospaced))
                     .tracking(1.1)
                     .foregroundStyle(Theme.faint)
@@ -652,7 +652,7 @@ struct PanelView: View {
                     }
                     .frame(width: 33, height: 33)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("小鼠电量 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0") · 原生版")
+                        Text("电量栏 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.1") · 原生版")
                             .font(.system(size: 10.5, weight: .medium))
                             .foregroundStyle(Color(red: 0.78, green: 0.83, blue: 0.79))
                         Text("ATK 2.4G 已适配；Razer 支持实验性接入，蓝牙鼠标通过系统读取。")
@@ -674,7 +674,7 @@ struct PanelView: View {
                 .overlay(RoundedRectangle(cornerRadius: 13).stroke(Theme.line, lineWidth: 1))
 
                 Button(action: actions.quit) {
-                    Text("退出小鼠电量")
+                    Text("退出电量栏")
                         .font(.system(size: 10))
                         .foregroundStyle(Color(red: 0.86, green: 0.60, blue: 0.55))
                         .frame(maxWidth: .infinity)

@@ -7,7 +7,7 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 **The name**: Batt (battery) + Bar (menu bar / taskbar). The Chinese name is **电量栏**. It is device-agnostic, so keyboards, headsets, and controllers can join later without a rename.
 
-> Naming: the project is **BattBar** (Chinese name: **电量栏**). The current macOS bundle still uses the legacy display name “小鼠电量” and bundle ID `com.mousebattery.app` to preserve notification and login-item permissions. Bundle branding migration is tracked in TODO P1. Windows and Linux are on the roadmap.
+> The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. Native Windows and Linux builds are on the roadmap.
 
 ![BattBar native panel](docs/native-panel.png)
 
@@ -63,17 +63,17 @@ Power-saving choices:
 
 Artifacts live in `release/`:
 
-- macOS (Universal, Apple Silicon + Intel): `MouseBattery-2.0.0-mac-universal.dmg`
-- macOS ZIP fallback: `MouseBattery-2.0.0-mac-universal.zip`
-- Windows x64 (legacy Electron build): `MouseBattery-1.0.0-win-x64.exe`
+- macOS (Universal, Apple Silicon + Intel): `BattBar-2.1.0-mac-universal.dmg`
+- macOS ZIP fallback: `BattBar-2.1.0-mac-universal.zip`
+- Windows x64 (legacy Electron build): `BattBar-2.1.0-win-x64.exe`
 - Checksums: `SHA256SUMS.txt`
 
-> The DMG/app filenames still use `MouseBattery` / “小鼠电量” for the compatibility reason described above. They will be renamed with the rest of the brand.
+The app inside the DMG is `BattBar.app` and appears as **BattBar** in Finder; drag it into Applications.
 
 The macOS build is ad-hoc signed. On first launch, right-click the app in Finder and choose **Open**. If Gatekeeper still blocks it:
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/小鼠电量.app"
+xattr -dr com.apple.quarantine "/Applications/BattBar.app"
 ```
 
 The Windows installer is unsigned; SmartScreen may show “Unknown publisher”. Choose **More info → Run anyway**.
@@ -113,7 +113,7 @@ Razer targets:
 - Viper V3 Pro wireless PID `0x00C1`; HyperPolling wireless dongle PID `0x00B3` (VID `0x1532` for both).
 - Transaction ID, CRC, battery/charging commands, and timing were checked against the OpenRazer sources. No physical device was available, so it remains experimental.
 - Plug in the Razer receiver and the panel will try to identify it. A successful read shows “Razer Viper V3 Pro” or “Razer 无线鼠标”.
-- For debugging, run `"/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe` to see the raw discovery result.
+- For debugging, run `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe` to see the raw discovery result.
 
 ## Adding device support
 
@@ -183,7 +183,7 @@ cd macos
 
 ./scripts/build-native.sh     # build the Universal .app
 ./scripts/test-native.sh      # protocol / Bluetooth parser / settings tests
-open build/小鼠电量.app
+open build/BattBar.app
 
 ./scripts/package-native.sh   # build DMG / ZIP and refresh release/SHA256SUMS.txt
 ```
@@ -191,13 +191,13 @@ open build/小鼠电量.app
 Output:
 
 ```text
-macos/build/小鼠电量.app
+macos/build/BattBar.app
 ```
 
 The script picks a compatible Command Line Tools SDK automatically. If the installed SDK does not match the compiler, set it explicitly:
 
 ```bash
-MOUSEBATTERY_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
+BATTBAR_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
   ./scripts/build-native.sh
 ```
 
@@ -258,7 +258,7 @@ See [TODO.md](TODO.md#p0-native-windows-app) for the native Windows design, limi
 - For a deeper look:
 
 ```bash
-"/Applications/小鼠电量.app/Contents/MacOS/MouseBattery" --probe
+"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe
 ```
 
 **Bluetooth mouse does not appear**
@@ -277,7 +277,7 @@ With **Hide while another app is fullscreen** enabled, the status item hides dur
 
 **No low battery notifications**
 
-- macOS: System Settings → Notifications → “小鼠电量” and allow notifications.
+- macOS: System Settings → Notifications → “BattBar” and allow notifications.
 - Permission is requested when alerts are first enabled. You can also use **Send test notification**.
 
 ## Privacy

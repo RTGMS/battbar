@@ -23,8 +23,8 @@ final class StatusItemController: NSObject {
             button.addSubview(contentView)
             contentView.frame = button.bounds
             contentView.autoresizingMask = [.width, .height]
-            button.toolTip = "小鼠电量"
-            button.setAccessibilityLabel("小鼠电量")
+            button.toolTip = "电量栏"
+            button.setAccessibilityLabel("电量栏")
         }
         contentView.onToggle = { [weak self] in
             self?.onTogglePanel?()
@@ -89,9 +89,9 @@ final class StatusItemController: NSObject {
         let lines = devices.map { device in
             "\(device.name)：\(device.isStale ? "上次读数 " : "")\(device.batteryText)"
         }
-        statusItem.button?.toolTip = lines.isEmpty ? "小鼠电量 · 未发现鼠标" : lines.joined(separator: "\n")
+        statusItem.button?.toolTip = lines.isEmpty ? "电量栏 · 未发现鼠标" : lines.joined(separator: "\n")
         statusItem.button?.setAccessibilityLabel(
-            devices.isEmpty ? "小鼠电量，未发现鼠标" : devices.map(\.accessibilityDescription).joined(separator: "；")
+            devices.isEmpty ? "电量栏，未发现鼠标" : devices.map(\.accessibilityDescription).joined(separator: "；")
         )
     }
 

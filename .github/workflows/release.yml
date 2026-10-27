@@ -44,8 +44,8 @@ jobs:
         with:
           name: BattBar-macOS
           path: |
-            release/MouseBattery-*-mac-universal.dmg
-            release/MouseBattery-*-mac-universal.zip
+            release/BattBar-*-mac-universal.dmg
+            release/BattBar-*-mac-universal.zip
             release/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -105,8 +105,8 @@ jobs:
         with:
           name: BattBar-Windows
           path: |
-            release/MouseBattery-*-win-x64.exe
-            release/MouseBattery-*-win-x64.exe.blockmap
+            release/BattBar-*-win-x64.exe
+            release/BattBar-*-win-x64.exe.blockmap
           if-no-files-found: error
 
   publish:

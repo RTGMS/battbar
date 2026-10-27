@@ -11,7 +11,7 @@ final class Scanner {
     let model: AppModel
     var onScanCompleted: ((ScanOutcome) -> Void)?
 
-    private let queue = DispatchQueue(label: "com.mousebattery.scanner", qos: .utility)
+    private let queue = DispatchQueue(label: "com.battbar.scanner", qos: .utility)
     private let bluetoothProvider = BluetoothProvider()
     private var scanning = false
 
@@ -58,7 +58,7 @@ final class Scanner {
             }
             semaphore.signal()
         }
-        thread.name = "MouseBattery.HIDScanner"
+        thread.name = "BattBar.HIDScanner"
         thread.qualityOfService = .utility
         thread.start()
         semaphore.wait()

@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("SELF-TEST panelShown=\(self.panelController.isShown)")
             self.panelController.close()
             self.statusController.update(devices: self.model.devices, preserveIndex: false)
-            let hold = Double(ProcessInfo.processInfo.environment["MOUSEBATTERY_SELFTEST_HOLD"] ?? "") ?? 0
+            let hold = Double(ProcessInfo.processInfo.environment["BATTBAR_SELFTEST_HOLD"] ?? "") ?? 0
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6 + hold) {
                 print("SELF-TEST panelShownAfterClose=\(self.panelController.isShown)")
                 let ok = self.statusController.statusItem.isVisible && self.panelController.isShown == false
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             testNotification: { [weak self] in
                 guard let self else { return }
                 self.notifications.sendTest { granted in
-                    self.model.settingsMessage = granted ? "测试通知已发送" : "通知未获授权，请在系统设置中允许小鼠电量发送通知。"
+                    self.model.settingsMessage = granted ? "测试通知已发送" : "通知未获授权，请在系统设置中允许电量栏发送通知。"
                 }
             },
             quit: { NSApp.terminate(nil) }
@@ -307,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "退出小鼠电量", action: #selector(menuQuit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出电量栏", action: #selector(menuQuit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
         return menu

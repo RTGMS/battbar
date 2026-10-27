@@ -1,7 +1,7 @@
 {
-  "name": "mouse-battery",
-  "version": "1.0.0",
-  "description": "跨平台无线鼠标电量托盘应用，已适配 ATK / VXE 等 Compx 方案鼠标。",
+  "name": "battbar",
+  "version": "2.1.0",
+  "description": "BattBar（电量栏）——跨平台无线外设电量托盘应用，已适配 ATK / VXE 等 Compx 方案鼠标。",
   "main": "electron/main.js",
   "private": true,
   "author": {
@@ -29,10 +29,10 @@
     "electron-builder": "26.18.0"
   },
   "build": {
-    "appId": "com.mousebattery.app",
-    "productName": "小鼠电量",
+    "appId": "com.battbar.app",
+    "productName": "BattBar",
     "copyright": "Copyright © 2026 Chen Wenjia",
-    "artifactName": "MouseBattery-${version}-${os}-${arch}.${ext}",
+    "artifactName": "BattBar-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -77,7 +77,7 @@
       }
     },
     "dmg": {
-      "title": "小鼠电量 ${version}",
+      "title": "BattBar ${version}",
       "window": {
         "width": 540,
         "height": 380
@@ -111,7 +111,7 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "shortcutName": "小鼠电量",
+      "shortcutName": "电量栏",
       "deleteAppDataOnUninstall": false
     },
     "electronLanguages": [
