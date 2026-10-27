@@ -90,7 +90,7 @@ enum PreviewRenderer {
         let rowHeight: CGFloat = 26
         let width: CGFloat = 230
         let height: CGFloat = padding * 2 + rowHeight * CGFloat(rows.count)
-        let scale: CGFloat = 3
+        let scale: CGFloat = 6
         let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(width * scale),
@@ -155,12 +155,30 @@ enum PreviewRenderer {
         print("preview devices=\(model.devices.count) active=\(model.activeDevice?.name ?? "nil")")
         let showSettings = ProcessInfo.processInfo.environment["BATTBAR_PREVIEW_SETTINGS"] == "1"
         let hosting = NSHostingView(rootView: PanelView(model: model, actions: actions, initiallyShowingSettings: showSettings))
-        hosting.frame = NSRect(x: 0, y: 0, width: 372, height: 560)
+        let bounds = NSRect(x: 0, y: 0, width: 372, height: 560)
+        hosting.frame = bounds
         hosting.layoutSubtreeIfNeeded()
-        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+        // Retina screens show a README image at roughly two device pixels per
+        // CSS pixel, so a 2x capture of a 372pt panel is upscaled on every
+        // retina display. Render at 4x to stay sharp at that size.
+        // cacheDisplay needs an alpha channel: an opaque rep comes out black.
+        let scale: CGFloat = 4
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(bounds.width * scale),
+            pixelsHigh: Int(bounds.height * scale),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
             throw RenderError.render
         }
-        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        rep.size = bounds.size
+        hosting.cacheDisplay(in: bounds, to: rep)
         guard let data = rep.representation(using: .png, properties: [:]) else {
             throw RenderError.png
         }

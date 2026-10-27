@@ -9,9 +9,9 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 > macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows 原生版正在开发中。
 
-![BattBar 原生面板](docs/native-panel.png)
+<img src="docs/native-panel.png" width="744" alt="BattBar 原生面板">
 
-![菜单栏显示效果](docs/native-menubar.png)
+<img src="docs/native-menubar.png" width="690" alt="菜单栏显示效果">
 
 ## 现在能做什么
 
@@ -271,6 +271,14 @@ BATTBAR_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
 ```bash
 ARCHS=arm64 ./scripts/build-native.sh
 ```
+
+重新生成 README 顶部的预览图（面板 4x、菜单栏 6x）：
+
+```bash
+macos/build/BattBar.app/Contents/MacOS/BattBar --render-preview docs
+```
+
+GitHub 把图片按「一个图片像素 = 一个 CSS 像素」显示，Retina 屏上每个 CSS 像素要占两个物理像素，所以 372 pt 的面板要渲染成 4x（1488 px），再在 README 里用 `width="744"` 显示回原来的大小，才能一比一落在屏幕上；按 2x 出图会在大屏上被放大一倍而发虚。
 
 ### CI / Release
 

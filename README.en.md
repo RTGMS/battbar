@@ -9,9 +9,9 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 > The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. A native Windows build is in progress.
 
-![BattBar native panel](docs/native-panel.png)
+<img src="docs/native-panel.png" width="744" alt="BattBar native panel">
 
-![Menu bar preview](docs/native-menubar.png)
+<img src="docs/native-menubar.png" width="690" alt="Menu bar preview">
 
 ## Features
 
@@ -204,6 +204,14 @@ Apple Silicon only:
 ```bash
 ARCHS=arm64 ./scripts/build-native.sh
 ```
+
+Regenerate the screenshots at the top of the README (4x panel, 6x menu bar):
+
+```bash
+macos/build/BattBar.app/Contents/MacOS/BattBar --render-preview docs
+```
+
+GitHub renders an image at one CSS pixel per image pixel, and a retina screen puts two device pixels in each CSS pixel, so the 372 pt panel is rendered at 4x (1488 px) and then displayed at its original size with `width="744"`. A 2x capture gets upscaled on any retina display and looks soft.
 
 ### CI / release
 
