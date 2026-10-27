@@ -63,11 +63,27 @@ jobs:
       - name: Run legacy tests
         run: npm test
 
+      - name: Prepare Windows output directory
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: mkdir -p release
+
       - name: Build Windows installer
         if: github.event_name != 'pull_request'
-        run: npm run pack:win
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run pack:win 2>&1 | tee win-build.log
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Show Windows build log on failure
+        if: failure() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          echo "::group::Windows build log"
+          tail -120 win-build.log || true
+          echo "::endgroup::"
 
       - name: Upload Windows artifacts
         if: github.event_name != 'pull_request'
