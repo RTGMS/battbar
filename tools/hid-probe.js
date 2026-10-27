@@ -17,9 +17,13 @@ let HID;
 try {
   HID = require('node-hid');
 } catch (error) {
-  console.error('无法加载 node-hid，请先运行 npm install。');
-  console.error(error.message);
-  process.exit(1);
+  // When required as a module (for the protocol cross-check) a missing native
+  // binding must not kill the process; only the CLI needs it.
+  if (require.main === module) {
+    console.error('无法加载 node-hid，请先运行 npm install。');
+    console.error(error.message);
+    process.exit(1);
+  }
 }
 
 const ATK_VENDOR_IDS = new Set([0x373b, 0x3554]);
@@ -185,11 +189,25 @@ function probeRazer() {
   }
 }
 
-const mode = (process.argv[2] || 'list').toLowerCase();
-if (mode === 'list') list();
-else if (mode === 'atk') probeAtk();
-else if (mode === 'razer') probeRazer();
-else {
-  console.error('用法: node tools/hid-probe.js [list|atk|razer]');
-  process.exit(2);
+// Exported so the protocol cross-check (core/scripts/crosscheck.mjs) can replay
+// the shared vectors against this probe instead of duplicating the logic.
+module.exports = {
+  ATK_VENDOR_IDS,
+  RAZER_PIDS,
+  RAZER_VENDOR_ID,
+  atkRequest,
+  decodeAtkBattery,
+  decodeRazer,
+  razerRequest,
+};
+
+if (require.main === module) {
+  const mode = (process.argv[2] || 'list').toLowerCase();
+  if (mode === 'list') list();
+  else if (mode === 'atk') probeAtk();
+  else if (mode === 'razer') probeRazer();
+  else {
+    console.error('用法: node tools/hid-probe.js [list|atk|razer]');
+    process.exit(2);
+  }
 }

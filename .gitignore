@@ -80,3 +80,7 @@ release/
 *.pem
 *.p12
 *.mobileprovision
+
+# Rust core build output / local toolchain caches
+core/target/
+core/.cargo-cache/

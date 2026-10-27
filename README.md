@@ -42,15 +42,36 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 ## 性能
 
-在 Apple M4 / macOS 27.0.1 / 5K 显示器上实测：
+在 Apple M4 Mac mini / macOS 27.0.1 上实测（`footprint` 的 `phys_footprint`，
+让应用通过真实面板连续开合 30 次采样）：
 
 | 状态 | 内存占用（footprint） |
 | --- | --- |
-| 菜单栏常驻、面板关闭 | 约 13–14 MB |
-| 面板打开时 | 约 32 MB |
-| 面板关闭后 | 约 31 MB |
+| 菜单栏常驻、从未打开面板 | 约 14 MB |
+| 面板打开时 | 峰值约 95–127 MB |
+| 面板关闭后 | 约 36–38 MB，此后不再增长（30 次开合无漂移） |
 
-对比旧 Electron 版本（主进程 + GPU + 网络 + 渲染进程）约 163 MB，原生版降低约 80%–90%。面板关闭后 SwiftUI/AppKit 会保留少量图形缓存，因此不会立刻回到 14 MB；但 CPU 空闲时接近 0，且不会像 Electron 一样常驻多个进程。
+面板打开时的高占用几乎全部是图形缓冲，不是对象泄漏——分类拆解显示
+`Owned physical footprint (graphics)` 约 66 MB、`IOSurface` 约 13 MB、`Malloc Small` 约 18 MB。
+关闭后图形缓冲大部分归还，但 SwiftUI/AppKit 会保留一部分，因此回不到 14 MB；
+这个值在第一次打开面板后就会稳定下来，不会随使用次数累积。
+
+对比旧 Electron 版本（主进程 + GPU + 网络 + 渲染进程）约 163 MB，原生版仍低约 77%–91%，
+且 CPU 空闲时接近 0，不会像 Electron 一样常驻多个进程。
+
+省电策略：
+
+- HID 电量查询按设置的间隔执行（30 秒 / 1 分钟 / 2 分钟 / 5 分钟），一次读取通常几十毫秒。
+- 蓝牙信息缓存 120 秒，避免频繁启动 `system_profiler`。
+- 只有长名称滚动或多设备切换动画时才有 30 fps 定时器；静止时没有动画定时器。
+- 面板打开、其他 App 全屏、屏幕休眠、锁屏时暂停轮询和动画。
+
+重新测量（需要真实接收器，会真实弹出面板）：
+
+```bash
+BATTBAR_PANEL_CYCLES=12 "macos/build/BattBar.app/Contents/MacOS/BattBar" &
+# 用 pid 采样：footprint -p <pid>
+```
 
 省电策略：
 
@@ -164,15 +185,33 @@ npm run probe:razer    # 发送 Razer 90 字节 feature report，打印原始应
 2. **再做 Windows 原生版**：HIDAPI 传输层 + 原生托盘 UI；现有 Electron 版先作为过渡。
 3. **最后补 Linux**：`hidraw` + 原生托盘。
 
-最终目标是 macOS / Windows / Linux 三平台，但 UI 和 HID 传输层会按平台落地，以保持低内存：
+最终目标是 macOS / Windows / Linux 三平台，但 **UI 按平台落地，协议核心共用一份 Rust 实现**：
 
-| 平台 | UI | HID 传输 | 状态 |
-| --- | --- | --- | --- |
-| macOS | Swift + AppKit | IOKit `IOHIDDevice` | 当前版本 |
-| Windows | 原生 Win32 / .NET 托盘（待定） | HIDAPI | 计划中；旧 Electron 版可先用 |
-| Linux | 原生托盘（待定） | `hidraw` + `HIDIOCGFEATURE` | 计划中 |
+| 平台 | UI | HID 传输 | 协议核心 | 状态 |
+| --- | --- | --- | --- | --- |
+| macOS | Swift + AppKit | IOKit `IOHIDDevice` | `core/`（经 C ABI 链接） | 当前版本（Swift 版尚未切到核心） |
+| Windows | 原生托盘（待定） | HIDAPI | `core/`（Rust crate 直接依赖） | 计划中；旧 Electron 版可先用 |
+| Linux | 原生托盘（待定） | `hidraw` + `HIDIOCGFEATURE` | `core/` | 计划中 |
 
-协议封包、校验和、电量换算、测试向量保持平台无关。现有 Electron 代码保留，作为 Windows 过渡实现和对照参考，不再作为 macOS 的发布形态。
+协议封包、校验和、电量换算、低电量去重与测试向量已经收拢到 [`core/`](core/README.md)：
+一份 Rust 实现，`#![forbid(unsafe_code)]`、零运行时依赖，通过 `core/vectors/vectors.json`
+与现有的 Swift / JavaScript 实现做三方对拍（`core/scripts/test-all.sh`）。
+
+现有 Electron 代码保留，作为 Windows 过渡实现和对照参考，不再作为 macOS 的发布形态。
+
+## 协议核心（Rust）
+
+要求：Rust 1.75+（含 `rustfmt` / `clippy`）。Swift 对拍还需要 macOS + Command Line Tools。
+
+```bash
+./core/scripts/test-all.sh      # 全量：fmt / clippy / 单测 / JS 对拍 / Swift 对拍 / FFI 冒烟
+cargo test --manifest-path core/Cargo.toml
+node core/scripts/crosscheck.mjs
+./core/scripts/build-macos.sh   # 产出 core/target/macos/libbattbar_ffi.a 并从 Swift 调用验证
+```
+
+`core/vectors/vectors.json` 是协议的单一事实来源，Rust、现有 Swift、现有 JavaScript
+三方都用它回放；任何一方行为漂移都会让检查失败。详见 [core/README.md](core/README.md)。
 
 ## macOS 开发
 

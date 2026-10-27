@@ -1,0 +1,17 @@
+[package]
+name = "battbar-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "C ABI for battbar-core, consumed by the macOS Swift app."
+publish = false
+
+[lib]
+name = "battbar_ffi"
+# cdylib for `dlopen`-style loading and for bundling as a dylib;
+# staticlib so the macOS app can link the core into its own binary.
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+battbar-core = { path = "../battbar-core" }

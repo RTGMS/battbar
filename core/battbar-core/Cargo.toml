@@ -1,0 +1,18 @@
+[package]
+name = "battbar-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Platform-independent protocol core for BattBar: ATK/Razer 2.4G HID packets, battery decoding, Bluetooth attribute parsing and low-battery decisions."
+publish = false
+
+[lib]
+name = "battbar_core"
+
+[dependencies]
+# Intentionally empty: the core only transforms byte slices and strings, so it
+# stays trivially portable to macOS (staticlib), Windows and Linux.
+
+[dev-dependencies]
+serde_json = "1"

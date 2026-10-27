@@ -1,0 +1,626 @@
+{
+  "$comment": "Single source of truth for protocol behaviour. Consumed by core/battbar-core/tests/vectors.rs, core/scripts/crosscheck.mjs (Electron/JS) and core/scripts/crosscheck-swift.sh (shipped macOS app). 'targets' lists the implementations that are required to agree; a case missing 'swift' or 'js' documents a known, intentional difference.",
+  "atk": {
+    "request_hex": "0804000000000000000000000000000049",
+    "decode": [
+      {
+        "name": "full 17-byte report",
+        "report_id": 8,
+        "hex": "0804000000026401107200000000000060",
+        "expect": {
+          "kind": "reading",
+          "battery": 100,
+          "charging": true
+        }
+      },
+      {
+        "name": "payload without the report-id prefix",
+        "report_id": 8,
+        "hex": "04000000026401",
+        "expect": {
+          "kind": "reading",
+          "battery": 100,
+          "charging": true
+        },
+        "targets": [
+          "rust",
+          "swift"
+        ]
+      },
+      {
+        "name": "charging flag is explicit",
+        "report_id": 8,
+        "hex": "08040000000241000000000000000000",
+        "expect": {
+          "kind": "reading",
+          "battery": 65,
+          "charging": false
+        }
+      },
+      {
+        "name": "battery above 100 is clamped",
+        "report_id": 8,
+        "hex": "080400000002ff000000000000000000",
+        "expect": {
+          "kind": "reading",
+          "battery": 100,
+          "charging": false
+        }
+      },
+      {
+        "name": "non-zero status is reported, not swallowed",
+        "report_id": 8,
+        "hex": "04010000026401",
+        "expect": {
+          "kind": "status",
+          "status": 1
+        },
+        "targets": [
+          "rust",
+          "swift"
+        ]
+      },
+      {
+        "name": "another report id is ignored",
+        "report_id": 9,
+        "hex": "09040000003200000000000000000000",
+        "expect": {
+          "kind": "not_for_us"
+        }
+      },
+      {
+        "name": "short report is ignored",
+        "report_id": 8,
+        "hex": "080400000064",
+        "expect": {
+          "kind": "not_for_us"
+        }
+      }
+    ],
+    "devices": {
+      "$comment": "hidapi enumeration (via node-hid) of an ATK Mouse 1K Dongle on macOS 2026-10-27. hidapi returns ONE ENTRY PER COLLECTION: it takes the 3 IOKit devices and expands each into one entry per usage pair (hidapi/mac/hid.c create_device_info), which is why the 0xFF04/0x02 vendor collection is visible here. The same shape is produced by hidapi on Windows (CM_Get_Device_Interface_ListW) and on Linux (one per hidraw node). Only the 0xFF04/0x02 collection may be selected.",
+      "items": [
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 65285,
+          "usage": 0,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 65283,
+          "usage": 0,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 12,
+          "usage": 1,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 128,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 65282,
+          "usage": 2,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 65284,
+          "usage": 2,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619569",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 6,
+          "interface": 0,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619568",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 2,
+          "interface": 2,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619568",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 1,
+          "interface": 2,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619568",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 56,
+          "interface": 2,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619568",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 568,
+          "interface": 2,
+          "product": "ATK Mouse 1K Dongle"
+        }
+      ],
+      "expect_candidates": [
+        {
+          "path": "DevSrvsID:4295619567",
+          "usage_page": 65284,
+          "usage": 2,
+          "interface": 1
+        }
+      ]
+    },
+    "macos_devices": {
+      "$comment": "Raw IOKit IOHIDManager enumeration of the SAME device (macOS 2026-10-27). IOHIDManagerCopyDevices returns ONE ENTRY PER DEVICE (3 total) and reports only the primary usage page (0xFF05); the 0xFF04/0x02 collection is not separately enumerable. The difference is the API, not the OS: hidapi builds its per-collection list on top of this very same IOKit data.",
+      "items": [
+        {
+          "path": "DevSrvsID:4295619567",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 65285,
+          "usage": 0,
+          "interface": 1,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619568",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 2,
+          "interface": 2,
+          "product": "ATK Mouse 1K Dongle"
+        },
+        {
+          "path": "DevSrvsID:4295619569",
+          "vendor_id": 14139,
+          "product_id": 4122,
+          "usage_page": 1,
+          "usage": 6,
+          "interface": 0,
+          "product": "ATK Mouse 1K Dongle"
+        }
+      ],
+      "expect_candidates": [
+        {
+          "path": "DevSrvsID:4295619567",
+          "usage_page": 65285
+        }
+      ]
+    }
+  },
+  "razer": {
+    "report_length": 90,
+    "requests": [
+      {
+        "name": "battery request",
+        "command_id": 128,
+        "crc": 133,
+        "crc_index": 88,
+        "transaction_id": 31,
+        "data_size": 2,
+        "command_class": 7
+      },
+      {
+        "name": "charging request",
+        "command_id": 132,
+        "crc": 129,
+        "crc_index": 88,
+        "transaction_id": 31,
+        "data_size": 2,
+        "command_class": 7
+      }
+    ],
+    "decode": [
+      {
+        "name": "battery 128 of 255 scales to 50%",
+        "hex": "021f00000002078000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "battery",
+          "battery": 50
+        }
+      },
+      {
+        "name": "battery 255 scales to 100%",
+        "hex": "021f00000002078000ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "battery",
+          "battery": 100
+        }
+      },
+      {
+        "name": "87 of 255 rounds to 34%",
+        "hex": "021f00000002078000570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "battery",
+          "battery": 34
+        }
+      },
+      {
+        "name": "charging response reports charging",
+        "hex": "021f00000002078400010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "charging",
+          "charging": true
+        }
+      },
+      {
+        "name": "failure status is reported",
+        "hex": "031f00000002078000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "status",
+          "status": 3
+        }
+      },
+      {
+        "name": "response for another command is rejected",
+        "hex": "021f00000002078400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "not_for_us"
+        }
+      },
+      {
+        "name": "leading report-id byte is absorbed",
+        "targets": [
+          "rust",
+          "js"
+        ],
+        "hex": "00021f00000002078000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expect": {
+          "kind": "battery",
+          "battery": 50
+        }
+      }
+    ]
+  },
+  "bluetooth": {
+    "battery_attributes": [
+      {
+        "name": "main level wins over the case level",
+        "attributes": [
+          [
+            "device_batteryLevelCase",
+            "90%"
+          ],
+          [
+            "device_batteryLevelMain",
+            "75%"
+          ]
+        ],
+        "expect": 75
+      },
+      {
+        "name": "falls back to any device_battery key",
+        "attributes": [
+          [
+            "device_batteryPercentCombined",
+            "42"
+          ]
+        ],
+        "expect": 42
+      },
+      {
+        "name": "secondary cells are ignored",
+        "attributes": [
+          [
+            "device_batteryLevelLeft",
+            "80%"
+          ],
+          [
+            "device_batteryLevelRight",
+            "70%"
+          ]
+        ],
+        "expect": null
+      },
+      {
+        "name": "out of range is rejected",
+        "attributes": [
+          [
+            "device_batteryLevelMain",
+            "101%"
+          ]
+        ],
+        "expect": null
+      },
+      {
+        "name": "negative is rejected, not read as positive",
+        "attributes": [
+          [
+            "device_batteryLevelMain",
+            "-5%"
+          ]
+        ],
+        "expect": null,
+        "targets": [
+          "rust",
+          "swift"
+        ]
+      }
+    ],
+    "charging_attributes": [
+      {
+        "name": "Yes",
+        "attributes": [
+          [
+            "device_charging",
+            "Yes"
+          ]
+        ],
+        "expect": true
+      },
+      {
+        "name": "discharging",
+        "attributes": [
+          [
+            "device_charging",
+            "discharging"
+          ]
+        ],
+        "expect": false
+      },
+      {
+        "name": "numeric 0",
+        "attributes": [
+          [
+            "device_charging",
+            "0"
+          ]
+        ],
+        "expect": false
+      },
+      {
+        "name": "unknown",
+        "attributes": [
+          [
+            "device_charging",
+            "maybe"
+          ]
+        ],
+        "expect": null
+      }
+    ],
+    "mouse_names": [
+      {
+        "name": "MX Master 3S",
+        "minor_type": "Mouse",
+        "expect": true
+      },
+      {
+        "name": "Magic Keyboard",
+        "minor_type": "Keyboard",
+        "expect": false
+      },
+      {
+        "name": "AirPods Pro",
+        "minor_type": "Headphones",
+        "expect": false
+      },
+      {
+        "name": "Attack Shark X3",
+        "minor_type": "",
+        "expect": true
+      },
+      {
+        "name": "WL Mouse Beast X",
+        "minor_type": "",
+        "expect": true
+      },
+      {
+        "name": "Logitech G PRO X Superlight",
+        "minor_type": "",
+        "expect": true
+      },
+      {
+        "name": "ATK 无线鼠标",
+        "minor_type": "",
+        "expect": true
+      }
+    ]
+  },
+  "alerts": {
+    "scenarios": [
+      {
+        "name": "single low notification, then quiet",
+        "enabled": true,
+        "steps": [
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 18
+              }
+            ],
+            "expect": [
+              "low"
+            ]
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 17
+              }
+            ],
+            "expect": []
+          }
+        ]
+      },
+      {
+        "name": "low then critical, no repeat",
+        "enabled": true,
+        "steps": [
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 19
+              }
+            ],
+            "expect": [
+              "low"
+            ]
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 9
+              }
+            ],
+            "expect": [
+              "critical"
+            ]
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 8
+              }
+            ],
+            "expect": []
+          }
+        ]
+      },
+      {
+        "name": "charging re-arms the device",
+        "enabled": true,
+        "steps": [
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 15
+              }
+            ],
+            "expect": [
+              "low"
+            ]
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 15,
+                "charging": true
+              }
+            ],
+            "expect": []
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 15
+              }
+            ],
+            "expect": [
+              "low"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "disabled alerts stay silent",
+        "enabled": false,
+        "steps": [
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 5
+              }
+            ],
+            "expect": []
+          }
+        ]
+      },
+      {
+        "name": "disappearing device is forgotten",
+        "enabled": true,
+        "steps": [
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 18
+              },
+              {
+                "id": "b",
+                "battery": 18
+              }
+            ],
+            "expect": [
+              "low",
+              "low"
+            ]
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 18
+              }
+            ],
+            "expect": []
+          },
+          {
+            "devices": [
+              {
+                "id": "a",
+                "battery": 18
+              },
+              {
+                "id": "b",
+                "battery": 18
+              }
+            ],
+            "expect": [
+              "low"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

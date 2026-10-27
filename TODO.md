@@ -6,9 +6,14 @@
 当前只剩两类真机验证没有完成：
 
 - **Razer Viper V3 Pro 2.4G**：代码已完成，没有设备，未做硬件回归。
-- **Windows 原生版**：还没开始；现有 Electron Windows 版只作为过渡。
+- **Windows 原生版**：UI 骨架未开始；协议核心已完成（见下方 P0 · Rust 协议核心）。
 
 macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播、全屏隐藏已做组件/模拟验证，但还没有真实多鼠标、真实全屏 App 的完整回归。
+
+架构决定（2026-10-27）：**UI 按平台分开，协议核心统一用 Rust**。macOS 继续用 Swift/AppKit，
+Windows 用 Rust，两端共用 [`core/`](core/README.md)。已经验证：`cargo check --target
+x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用。
+
 
 ## 换电脑后先做这 4 步
 
@@ -32,6 +37,76 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 4. 把输出、接收器 VID/PID、系统版本填到文末的[验证记录](#验证记录模板)，发回来即可。
 
 > Windows 的 `node-hid` 使用预编译二进制；如果加载失败，确认 Node 是 64 位，并尝试 `npm rebuild node-hid`。macOS 上也可以用同一套 Node 探针做对照。
+
+---
+
+<a id="p0-rust-协议核心"></a>
+<a id="p0-shared-rust-core"></a>
+## P0 · Rust 协议核心 / Shared Rust Core
+
+目标：**协议只写一份**，平台层只负责开设备、读字节、画界面。
+
+### 已完成（2026-10-27）
+
+- [x] 新建 `core/` workspace：`battbar-core`（纯逻辑）+ `battbar-ffi`（C ABI）。
+- [x] ATK：组包 / 校验和 / 解码 / 候选过滤 / 显示名 / 稳定 ID（含 SHA-1 指纹，兼容旧 Electron 的选择记忆）。
+- [x] Razer：90 字节 feature report / CRC / 电量换算 / 充电解码 / 91 字节前缀兼容。
+- [x] 蓝牙：macOS 属性优先级、Windows PnP 校验、鼠标识别（去空格、大小写不敏感）。
+- [x] 低电量提醒：20% / 10% 去重、充电与恢复到 25% 后重新武装、设备消失后忘记。
+- [x] `core/vectors/vectors.json` 共享测试向量 + 三方对拍（Rust / Swift / JS）。
+- [x] C ABI + 头文件 + Swift 冒烟测试（`core/scripts/build-macos.sh`）。
+- [x] CI：`core` job（fmt / clippy / test / 双对拍 / FFI）、`core-windows` job（MSVC 编译检查）。
+- [x] `cargo check --target x86_64-pc-windows-msvc` 在 macOS 上通过。
+
+当前结果：`cargo test` 67 通过；JS 对拍 40 通过 3 跳过；Swift 对拍 45 通过 1 跳过；FFI 冒烟通过。
+
+真机交叉验证（2026-10-27，本机 ATK 1K 接收器，`core/scripts/hardware-test-macos.sh`）：
+
+- 连续读取 **30/30 成功**，超时 0 次，每次 21–26 ms。
+- 同一份报文交给**已发布的 Swift 实现**和 **Rust 核心**解码，30 次结果全部一致。
+- 核心生成的请求字节与 Swift 完全相同。
+- 已发布 App 的 `--self-test` 在本机 PASS（设备 1 台、面板正常开关）。
+- 进程峰值内存：30 次真机读取 + 解码的测试程序 9.6 MB；正在运行的 BattBar.app
+  `phys_footprint` 38 MB（峰值 135 MB，当时面板开过）。
+
+**关于枚举模型（修正）**：我最初写成"macOS 与 Windows 的设备枚举不同"，**这是错的**。
+查 hidapi 源码后确认差异在 **API**，不在系统：
+
+- `hidapi/mac/hid.c` 的 `create_device_info()` 把 IOKit 的每设备结果按 usage pair **自己展开**
+  （本机实测 3 设备 → 11 条记录）。
+- `hidapi/windows/hid.c` 用 `CM_Get_Device_Interface_ListW` 枚举 device interface，本身就是按 collection。
+
+所以：hidapi（node-hid / Rust hidapi crate）→ 每 collection 一条；裸 IOKit → 每设备一条。
+核心保留两套规则（`find_candidates` / `battbar_atk_is_macos_candidate`），按**调用方的 API** 选，
+不是按系统选。已加不变式测试断言两张真实设备表描述同一批物理设备。
+
+**关于内存（结论被真机推翻）**：我最初用离屏探针测出"面板每次打开泄漏约 4.4 MB"，
+并据此改了 `PanelController`。**这个结论是错的**——离屏面板不参与真实合成，图层会累积，
+造就了假的线性增长。换成真实应用 + 真实面板开合后：
+
+| 版本 | 首次 | 关闭后稳定值 | 30 次开合后 |
+| --- | --- | --- | --- |
+| 修复前（HEAD） | 14 MB | 36 MB | 36 MB（无漂移） |
+| 我的"修复" | 14 MB | 36 MB | 36 MB（无差别） |
+
+- **没有泄漏**：开合 3 次后稳定在 36 MB，30 次后仍 36 MB。
+- 面板打开时峰值 95–127 MB，主要是图形缓冲（graphics 66 MB + IOSurface 13 MB），关闭后归还大部分。
+- 已把 `PanelController` / `PanelView` 的改动**回退**（无收益，减少风险），
+  只在 `AppDelegate` 保留一个测试钩子 `BATTBAR_PANEL_CYCLES`（仅测试用，可随时删）。
+- README 的性能表已按实测更新。
+
+**教训**：性能结论必须用真实应用、真实数据、真实屏幕测；离屏/合成数据会给出错误答案。
+
+### 待办
+
+- [ ] macOS 版接入核心：把 `ATKProtocol.swift` / `RazerProtocol.swift` 的实现换成 FFI 调用，保留现有 Swift 测试做回归。
+      ATK 的真机对拍已经做过（30/30 一致），接入后只需重跑 `core/scripts/test-all.sh --hw`。
+      **注意**：接入时设备过滤要换成 `battbar_atk_is_macos_candidate`，不要用 Windows 的 per-collection 规则。
+- [ ] 真机验证后再删除 Swift/JS 里的重复协议实现。
+- [ ] 补齐 `bluetooth` 的 Swift 对拍覆盖面（目前 Swift 侧只覆盖 ATK / Razer / 蓝牙属性）。
+
+> 已知差异（核心已修正、旧实现保留）记录在 [core/README.md](core/README.md#已知差异有意为之)：
+> ATK 短包、短包里的非零状态码、蓝牙 `-5%` 被误读、Razer 91 字节响应。
 
 ---
 
@@ -78,6 +153,12 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 
    ```text
    DEVICE: razer | Razer Viper V3 Pro | 67% | 2.4 GHz | stale=false
+   ```
+
+   如果读到异常值，用核心的解码器单独验一遍抓到的 hex，排除"协议理解错"还是"传输没拿到"：
+
+   ```bash
+   cargo run --manifest-path core/Cargo.toml --example decode-hex -- razer <90字节hex>
    ```
 
 4. 打开 BattBar 面板，确认电量、充电状态、数据来源。
@@ -162,15 +243,19 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 
 ### 先要决定的事
 
-- [ ] **UI 技术栈**
-  - 方案 A：C# .NET 8 + WinForms `NotifyIcon`，开发快，预计 30–50 MB。
-  - 方案 B：C++ Win32 + 自绘托盘/弹窗，内存最低，预计 10–20 MB，但开发慢。
-  - 方案 C：Rust + `tray-icon` + 原生 Win32 弹窗，兼顾体积和开发效率，需要评估。
-  - 建议先做 2 天原型，用 `footprint` 类似工具（Task Manager / `Get-Process`）对比后定。
+- [x] **协议层**：已定 —— 复用 [`core/`](core/README.md) 的 `battbar-core` crate，**不走 FFI**（同语言直接依赖）。
+- [x] **Rust 作 UI 技术栈已确定**（2026-10-27）：与核心同语言、内存可控、可在 macOS 上交叉编译检查。
+      剩下的只是托盘/弹窗库选型，见下。
+- [ ] **托盘库选型**
+  - 方案 A：`tray-icon` + 自绘 Win32 弹窗（egui / 手写 GDI），体积小，样式完全可控。
+  - 方案 B：`tao` + `wry`（WebView2），UI 开发快，但会多一个 WebView 进程，内存不达标风险高。
+  - 方案 C：直接 `windows` crate 调 Win32 API，最小依赖、最低内存，但代码量最大。
+  - 建议：先做 2 天原型，用 `Get-Process` 实测内存后定；**目标是 < 25 MB，WebView2 方案大概率出局**。
 - [ ] **托盘如何显示电量**
   - Windows 通知区域只支持图标，不支持 macOS 这种“名称 + 电量”文本。
   - 推荐：托盘图标绘制电量数字/圆环；tooltip 列出 `名称：电量`；点击打开面板显示完整列表。
   - 备选：始终置顶的小悬浮条（可能影响游戏/全屏，默认关闭）。
+  - 注意：16×16 图标放不下 3 位数字 + 颜色，需要 32px 高清资源并做 Per-Monitor DPI。
 - [ ] **全屏时是否隐藏**
   - Windows 任务栏本身通常会自动隐藏；是否隐藏托盘图标需要产品决策。
   - 如实现：检测前台窗口覆盖显示器 + 任务栏自动隐藏状态，再隐藏图标；退出全屏恢复。
@@ -180,21 +265,24 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 
 ### 实现清单
 
-- [ ] 新建 `windows/` 原生工程，确定构建工具（MSBuild / CMake / Cargo）。
-- [ ] 单实例锁：重复启动时唤起已有实例的面板。
-- [ ] HID 传输层：HIDAPI（`hidapi.dll`）或 `HidSharp`；封装枚举、open、write、read、feature report。
-- [ ] ATK Provider
-  - [ ] VID `0x373B` / `0x3554`，PID `0x101A` 及后续型号。
-  - [ ] 17 字节写入（report ID `0x08` + 16 字节 payload）。
-  - [ ] 读取 report 8，解析 battery/charging；Windows HIDAPI 的 read 缓冲是否包含 report ID 要实测。
-- [ ] Razer Provider
-  - [ ] VID `0x1532`，PID `0x00C1` / `0x00B3`。
-  - [ ] 90 字节 feature report、CRC、事务 `0x1F`、电量/充电命令。
-  - [ ] **Windows 特有**：HIDAPI `hid_send_feature_report` 的 report ID 语义与 macOS IOKit 不同；实测 90 / 91 字节两种写入方式，记录哪种被接收器接受。
-- [ ] Bluetooth Provider
-  - [ ] 优先复用/移植 `electron/providers/windows-bt.ps1` 与 `windows-bluetooth.js` 的 PnP 属性读取逻辑。
-  - [ ] 评估 WinRT `Windows.Devices.Bluetooth` 或 SetupAPI；记录哪些鼠标型号暴露 battery 属性。
-  - [ ] 过滤鼠标类设备，避免耳机/键盘误报。
+- [ ] 新建 `windows/` Rust 工程（`cargo` + `windows` crate），依赖 `battbar-core`。
+- [ ] 单实例锁：`CreateMutex` + `FindWindow`，重复启动时唤起已有实例的面板。
+- [ ] HID 传输层：HIDAPI（`hidapi` crate 或直接 `SetupAPI` + `hid.dll`）；封装枚举、open、write、read、feature report。
+- [x] ATK 协议（**已在 `battbar-core` 完成**）
+  - [x] VID `0x373B` / `0x3554`，候选过滤（含 interface fallback 与键盘排除）。
+  - [x] 17 字节写入（report ID `0x08` + 16 字节 payload）。
+  - [x] 解析 battery/charging，自动兼容带/不带 report ID 的读缓冲。
+  - [ ] **真机待测**：Windows HIDAPI 的 read 缓冲到底含不含 report ID。
+- [x] Razer 协议（**已在 `battbar-core` 完成**）
+  - [x] VID `0x1532`，PID `0x00C1` / `0x00B3`。
+  - [x] 90 字节 feature report、CRC、事务 `0x1F`、电量/充电命令。
+  - [x] 91 字节（带前导 report ID）响应自动兼容。
+  - [ ] **真机待测**：`hid_send_feature_report` 用 90 还是 91 字节写入能被接收器接受。
+- [x] Bluetooth 规则（**已在 `battbar-core` 完成**）
+  - [x] PnP 行校验：present 过滤、0–100 范围、鼠标识别。
+  - [ ] 传输层仍需实现：SetupAPI 读 `{104EA319-...} 2` 电池属性，或 WinRT `Windows.Devices.Bluetooth`。
+  - [ ] 记录哪些鼠标型号暴露 battery 属性。
+- [x] 低电量判定（**已在 `battbar-core` 完成**）：20% / 10% 去重、充电后重新武装。
 - [ ] 托盘 UI
   - [ ] 图标绘制电量数字/颜色；高 DPI 1x/2x 资源。
   - [ ] tooltip 多设备列表。
@@ -298,6 +386,7 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 
 - [README（中文）](README.md)
 - [README (English)](README.en.md)
+- [协议核心 core/](core/README.md)
 - [ATK 协议](docs/atk-protocol.md)
 - [Razer 协议](docs/razer-protocol.md)
 - [HID 验证探针](tools/hid-probe.js)
