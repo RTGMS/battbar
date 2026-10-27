@@ -8,7 +8,7 @@ APP="$ROOT/build/BattBar.app"
 
 # Prefer the version embedded in the built app, then the environment.
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)}"
-VERSION="${VERSION:-2.3.0}"
+VERSION="${VERSION:-2.4.0}"
 VERSION="${VERSION#v}"
 NAME="BattBar-$VERSION-mac-universal"
 

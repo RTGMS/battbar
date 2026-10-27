@@ -63,9 +63,9 @@ Power-saving choices:
 
 Artifacts live in `release/`:
 
-- macOS (Universal, Apple Silicon + Intel): `BattBar-2.3.0-mac-universal.dmg`
-- macOS ZIP fallback: `BattBar-2.3.0-mac-universal.zip`
-- Windows x64 (legacy Electron build): `BattBar-2.3.0-win-x64.exe`
+- macOS (Universal, Apple Silicon + Intel): `BattBar-2.4.0-mac-universal.dmg`
+- macOS ZIP fallback: `BattBar-2.4.0-mac-universal.zip`
+- Windows x64 (legacy Electron build): `BattBar-2.4.0-win-x64.exe`
 - Checksums: `SHA256SUMS.txt`
 
 The app inside the DMG is `BattBar.app` and appears as **BattBar** in Finder; drag it into Applications.
