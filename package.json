@@ -18,8 +18,8 @@
     "probe:razer": "node tools/hid-probe.js razer",
     "icons": "python3 scripts/make-icons.py",
     "pack:dir": "electron-builder --dir",
-    "pack:mac": "electron-builder --mac dmg zip --arm64",
-    "pack:win": "electron-builder --win nsis --x64"
+    "pack:mac": "electron-builder --mac dmg zip --arm64 --publish never",
+    "pack:win": "electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "node-hid": "3.4.0"
