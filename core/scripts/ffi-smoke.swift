@@ -44,8 +44,9 @@ check(refused == statusInvalidArgument, "atk request must refuse a short buffer,
 // ATK decode of a real-shaped report.
 let sample: [UInt8] = [0x08, 0x04, 0, 0, 0, 0x02, 0x64, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 var reading = BattbarReading(battery: 0, charging: 0)
+var deviceStatus: UInt8 = 0
 let decoded = sample.withUnsafeBufferPointer { buffer in
-    battbar_atk_decode(0x08, buffer.baseAddress, buffer.count, &reading)
+    battbar_atk_decode(0x08, buffer.baseAddress, buffer.count, &reading, &deviceStatus)
 }
 check(decoded == statusOK, "atk decode status, got \(decoded)")
 check(reading.battery == 100, "atk battery, got \(reading.battery)")
@@ -54,14 +55,14 @@ check(reading.charging == 1, "atk charging, got \(reading.charging)")
 // A foreign report must be ignored, not treated as an error.
 let foreign: [UInt8] = [0x09, 0x04, 0, 0, 0, 50, 0]
 let ignored = foreign.withUnsafeBufferPointer { buffer in
-    battbar_atk_decode(0x09, buffer.baseAddress, buffer.count, &reading)
+    battbar_atk_decode(0x09, buffer.baseAddress, buffer.count, &reading, &deviceStatus)
 }
 check(ignored == statusNotForUs, "atk foreign report, got \(ignored)")
 
 // Razer request: 90 bytes with CRC 0x85 for the battery command.
 var razer = [UInt8](repeating: 0, count: Int(battbar_razer_request_len()))
 let razerLength = razer.withUnsafeMutableBufferPointer { buffer in
-    battbar_razer_request(0x80, buffer.baseAddress, buffer.count)
+    battbar_razer_request(0x07, 0x80, buffer.baseAddress, buffer.count)
 }
 check(razerLength == 90, "razer request length, got \(razerLength)")
 check(razer[88] == 0x85, "razer crc, got \(razer[88])")

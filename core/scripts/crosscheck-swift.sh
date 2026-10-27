@@ -1,9 +1,11 @@
 #!/bin/bash
-# Replay core/vectors/vectors.json against the shipped macOS Swift code.
+# Replay core/vectors/vectors.json through the Swift types the app ships.
 #
-# Compiles the protocol sources together with a tiny driver (no SwiftPM needed,
-# same approach as macos/scripts/test-native.sh) and exits non-zero when the
-# Swift implementation disagrees with the shared vectors.
+# Since the macOS app now delegates to the Rust core over the C ABI, this
+# verifies the *binding*: that the Swift wrappers surface the vector results
+# correctly (status mapping, error mapping, value conversion). Independent
+# agreement of a separately written implementation is covered by
+# crosscheck.mjs, which still exercises the JavaScript code path.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -27,6 +29,15 @@ if [[ -z "$SDK" ]]; then
 fi
 [[ -n "$SDK" ]] || SDK="$(xcrun --sdk macosx --show-sdk-path)"
 
+# The Swift protocol types call into the Rust core, so link it.
+CORE="$ROOT/core"
+mkdir -p "$OUT/.core"
+cargo build --manifest-path "$CORE/Cargo.toml" --release \
+  --package battbar-ffi --target "$(uname -m | sed 's/arm64/aarch64/')-apple-darwin" \
+  >&2
+cp "$CORE/target/$(uname -m | sed 's/arm64/aarch64/')-apple-darwin/release/libbattbar_ffi.a" \
+  "$OUT/.core/libbattbar_ffi.a"
+
 FILES=(
   "$SRC/Providers/Models.swift"
   "$SRC/Providers/HIDSupport.swift"
@@ -46,6 +57,8 @@ TARGET="${ARCH}-apple-macos13.0"
 HOME="$OUT/.cache/home" swiftc -Onone \
   -sdk "$SDK" -target "$TARGET" \
   -module-cache-path "$OUT/.cache/clang" \
+  -import-objc-header "$CORE/battbar-ffi/include/battbar_core.h" \
+  -L "$OUT/.core" -lbattbar_ffi \
   "${FILES[@]}" -o "$OUT/swift-crosscheck" \
   -framework IOKit -framework Foundation
 

@@ -97,11 +97,13 @@ int32_t battbar_atk_request(uint8_t *out, size_t out_len);
  *                   optional and handled transparently.
  * @param len        length of `bytes`.
  * @param out        receives the reading on BATTBAR_OK.
+ * @param out_status optional (may be NULL); receives the device status byte
+ *                   when the result is BATTBAR_ERROR_STATUS.
  *
  * @return BATTBAR_OK, BATTBAR_NOT_FOR_US (keep reading), or a negative code.
  */
 int32_t battbar_atk_decode(uint8_t report_id, const uint8_t *bytes, size_t len,
-                           BattbarReading *out);
+                           BattbarReading *out, uint8_t *out_status);
 
 /* ---- Razer 2.4G -------------------------------------------------------- */
 
@@ -111,10 +113,12 @@ size_t battbar_razer_request_len(void);
 /**
  * Fill `out` with a Razer request.
  *
- * @param command_id 0x80 for battery, 0x84 for charging.
+ * @param command_class 0x07 for the commands we use.
+ * @param command_id    0x80 for battery, 0x84 for charging.
  * @return the number of bytes written, or BATTBAR_ERROR_INVALID_ARGUMENT.
  */
-int32_t battbar_razer_request(uint8_t command_id, uint8_t *out, size_t out_len);
+int32_t battbar_razer_request(uint8_t command_class, uint8_t command_id,
+                              uint8_t *out, size_t out_len);
 
 /**
  * Decode a Razer battery response.

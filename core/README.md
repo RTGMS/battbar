@@ -27,8 +27,9 @@ core/
 `tools/hid-probe.js`），校验和公式各写各的，行为已经出现分歧（见下方"已知差异"）。
 把协议放进一个可测试的核心里，平台层只负责"开设备、读字节、画界面"。
 
-**没有改 macOS 应用**：Swift 版仍是唯一的 macOS 发布形态，`core/` 通过 FFI 提供能力，
-迁移是后续独立的一步。
+**macOS 应用已经接入**：`ATKProtocol.swift` / `RazerProtocol.swift` 不再自己实现协议，
+改为调用本目录的 C ABI（`core/battbar-ffi`），在 `macos/scripts/build-native.sh` 里按架构编译成
+静态库并链接进 bundle。应用自己的 34 项 Swift 测试现在跑的就是 Rust 核心。
 
 ## 快速开始
 
@@ -211,7 +212,10 @@ cargo check --manifest-path core/Cargo.toml --target x86_64-pc-windows-msvc --wo
 
 ## 后续步骤
 
-1. macOS 版接入核心（把 `ATKProtocol.swift` / `RazerProtocol.swift` 的实现替换为 FFI 调用），
-   保留现有 Swift 测试作为回归。
-2. Windows 原生版落地，直接使用 crate。
-3. 三平台都跑在核心之上后，删除 Electron 与探针里的重复协议实现。
+1. ~~macOS 版接入核心~~ 已完成（2026-10-27）：`ATKProtocol` / `RazerProtocol` 改为 FFI 调用，
+   现有 Swift 测试作为回归，真机 21 项检查通过。
+2. 蓝牙规则仍留在 Swift（`BluetoothProvider`）。它只处理系统给的 JSON 结构，属于平台层职责，
+   与核心的差异由 `crosscheck.mjs` 与 `tests/vectors.rs` 守着；如果要彻底统一，需要给
+   `battbar-core::bluetooth` 加一组 key/value 的 C ABI。
+3. Windows 原生版落地，直接使用 crate。
+4. 三平台都跑在核心之上后，删除 Electron 与探针里的重复协议实现。

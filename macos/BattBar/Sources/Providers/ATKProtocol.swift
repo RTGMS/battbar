@@ -11,44 +11,67 @@ enum ATKDecodeError: Error, Equatable {
 
 /// ATK / Compx 2.4G receiver protocol.
 ///
-/// The receiver exposes a 16-byte vendor report (report ID `0x08`). The first
-/// byte is the command (`0x04` for battery), the last byte is a checksum seeded
-/// with the report ID:
+/// The encoding/decoding lives in the Rust core (`core/battbar-core`) and is
+/// reached through the C ABI declared in
+/// `core/battbar-ffi/include/battbar_core.h`. This type is a thin typed wrapper
+/// so the rest of the app keeps working with Swift values.
+///
+/// The receiver exposes a 16-byte vendor report (report ID `0x08`). Byte 0 is
+/// the command (`0x04` for battery), the last byte is a checksum seeded with the
+/// report ID:
 ///
 ///     checksum = (0x55 - ((0x08 + sum(bytes[0..14])) & 0xFF)) & 0xFF
 ///
 /// macOS expects the report ID as the first byte of the buffer passed to
 /// `IOHIDDeviceSetReport`, hence the 17-byte request buffer.
 enum ATKProtocol {
-    static let reportID: UInt8 = 0x08
+    /// HID report ID, sourced from the core so there is a single definition.
+    static var reportID: UInt8 { UInt8(battbar_atk_report_id()) }
     static let commandBattery: UInt8 = 0x04
-    static let packetLength = 17
+    /// Request length including the report ID (17).
+    static var packetLength: Int { Int(battbar_atk_request_len()) }
 
     static func batteryRequest() -> [UInt8] {
         var packet = [UInt8](repeating: 0, count: packetLength)
-        packet[0] = reportID
-        packet[1] = commandBattery
-        var checksum = 0
-        for index in 0..<(packetLength - 1) {
-            checksum += Int(packet[index])
+        let written = packet.withUnsafeMutableBufferPointer {
+            battbar_atk_request($0.baseAddress, $0.count)
         }
-        packet[packetLength - 1] = UInt8((0x55 - (checksum & 0xff)) & 0xff)
+        precondition(written == packet.count, "battbar_atk_request returned \(written)")
         return packet
     }
 
+    /// Decode a report read from the receiver.
+    ///
+    /// Returns `nil` when the buffer is not an ATK battery report (keep
+    /// reading), and `.failure` when the device reported an error status.
     static func decode(reportID: Int, bytes: [UInt8]) -> Result<ATKReading, ATKDecodeError>? {
-        var payload = bytes
-        if payload.first == self.reportID {
-            payload.removeFirst()
-        } else if reportID != Int(self.reportID) {
+        var reading = BattbarReading(battery: 0, charging: 0)
+        var deviceStatus: UInt8 = 0
+        let result = bytes.withUnsafeBufferPointer {
+            battbar_atk_decode(
+                UInt8(truncatingIfNeeded: reportID),
+                $0.baseAddress,
+                $0.count,
+                &reading,
+                &deviceStatus
+            )
+        }
+        switch result {
+        case statusOK:
+            return .success(ATKReading(battery: Int(reading.battery), charging: reading.charging == 1))
+        case statusNotForUs:
+            return nil
+        case statusDeviceError:
+            return .failure(.invalidStatus(deviceStatus))
+        default:
+            // Too short or malformed: not a usable report, keep waiting.
             return nil
         }
-        guard payload.count >= 7, payload[0] == commandBattery else { return nil }
-        let status = payload[1]
-        guard status == 0 else { return .failure(.invalidStatus(status)) }
-        return .success(ATKReading(
-            battery: normalizedBattery(Int(payload[5])),
-            charging: payload[6] == 1
-        ))
     }
 }
+
+// Mirrors of the status codes in battbar_core.h (C macros do not import into
+// Swift). Kept in sync with `core/battbar-ffi/src/lib.rs`.
+let statusOK: Int32 = 1
+let statusNotForUs: Int32 = 0
+let statusDeviceError: Int32 = -3

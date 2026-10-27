@@ -152,6 +152,7 @@ pub unsafe extern "C" fn battbar_atk_decode(
     bytes: *const u8,
     len: usize,
     out: *mut BattbarReading,
+    out_status: *mut u8,
 ) -> i32 {
     if bytes.is_null() || out.is_null() {
         return status::ERROR_INVALID_ARGUMENT;
@@ -165,7 +166,16 @@ pub unsafe extern "C" fn battbar_atk_decode(
             write_reading(out, reading);
             status::OK
         }
-        Some(Err(error)) => error_to_status(error),
+        Some(Err(error)) => {
+            // Mirror the device status byte for callers that surface it.
+            if !out_status.is_null() {
+                if let DecodeError::Status(value) = &error {
+                    // SAFETY: non-null and the caller provided one byte.
+                    unsafe { *out_status = *value };
+                }
+            }
+            error_to_status(error)
+        }
     }
 }
 
@@ -175,13 +185,15 @@ pub extern "C" fn battbar_razer_request_len() -> usize {
     razer::REPORT_LENGTH
 }
 
-/// Fill `out` with a Razer request for `command_id`
-/// (`0x80` battery, `0x84` charging). Returns the byte count or an error.
+/// Fill `out` with a Razer request for `command_class` / `command_id`
+/// (`0x07`/`0x80` battery, `0x07`/`0x84` charging). Returns the byte count or
+/// an error.
 ///
 /// # Safety
 /// `out` must be valid for writes of `out_len` bytes.
 #[no_mangle]
 pub unsafe extern "C" fn battbar_razer_request(
+    command_class: u8,
     command_id: u8,
     out: *mut u8,
     out_len: usize,
@@ -189,7 +201,7 @@ pub unsafe extern "C" fn battbar_razer_request(
     if out.is_null() || out_len < razer::REPORT_LENGTH {
         return status::ERROR_INVALID_ARGUMENT;
     }
-    let request = razer::request(razer::COMMAND_CLASS, command_id);
+    let request = razer::request(command_class, command_id);
     // SAFETY: checked above, and the source is a fixed-size array.
     unsafe {
         std::ptr::copy_nonoverlapping(request.as_ptr(), out, razer::REPORT_LENGTH);
@@ -315,7 +327,9 @@ mod tests {
     fn rejects_null_pointers() {
         let mut reading = BattbarReading::default();
         // SAFETY: null is explicitly allowed as an invalid input.
-        let result = unsafe { battbar_atk_decode(8, std::ptr::null(), 0, &mut reading) };
+        let result = unsafe {
+            battbar_atk_decode(8, std::ptr::null(), 0, &mut reading, std::ptr::null_mut())
+        };
         assert_eq!(result, status::ERROR_INVALID_ARGUMENT);
     }
 
@@ -325,22 +339,46 @@ mod tests {
             0x08, 0x04, 0, 0, 0, 0x02, 0x64, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
         let mut reading = BattbarReading::default();
+        let mut device_status = 0u8;
         // SAFETY: the slice and the out pointer are valid.
-        let result = unsafe { battbar_atk_decode(8, sample.as_ptr(), sample.len(), &mut reading) };
+        let result = unsafe {
+            battbar_atk_decode(
+                8,
+                sample.as_ptr(),
+                sample.len(),
+                &mut reading,
+                &mut device_status,
+            )
+        };
         assert_eq!(result, status::OK);
         assert_eq!(reading.battery, 100);
         assert_eq!(reading.charging, 1);
 
         let status_only = [0x04, 0x01, 0, 0, 0, 50, 0];
         // SAFETY: as above.
-        let result =
-            unsafe { battbar_atk_decode(8, status_only.as_ptr(), status_only.len(), &mut reading) };
+        let result = unsafe {
+            battbar_atk_decode(
+                8,
+                status_only.as_ptr(),
+                status_only.len(),
+                &mut reading,
+                &mut device_status,
+            )
+        };
         assert_eq!(result, status::ERROR_STATUS);
+        assert_eq!(device_status, 1, "the device status byte is mirrored out");
 
         let foreign = [0x09, 0x04, 0, 0, 0, 50, 0];
         // SAFETY: as above.
-        let result =
-            unsafe { battbar_atk_decode(9, foreign.as_ptr(), foreign.len(), &mut reading) };
+        let result = unsafe {
+            battbar_atk_decode(
+                9,
+                foreign.as_ptr(),
+                foreign.len(),
+                &mut reading,
+                std::ptr::null_mut(),
+            )
+        };
         assert_eq!(result, status::NOT_FOR_US);
     }
 
@@ -349,7 +387,12 @@ mod tests {
         let mut request = [0u8; 90];
         // SAFETY: the buffer matches the report length.
         let written = unsafe {
-            battbar_razer_request(razer::BATTERY_COMMAND, request.as_mut_ptr(), request.len())
+            battbar_razer_request(
+                razer::COMMAND_CLASS,
+                razer::BATTERY_COMMAND,
+                request.as_mut_ptr(),
+                request.len(),
+            )
         };
         assert_eq!(written, 90);
         assert_eq!(request[88], 0x85);

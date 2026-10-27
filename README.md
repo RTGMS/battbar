@@ -189,13 +189,15 @@ npm run probe:razer    # 发送 Razer 90 字节 feature report，打印原始应
 
 | 平台 | UI | HID 传输 | 协议核心 | 状态 |
 | --- | --- | --- | --- | --- |
-| macOS | Swift + AppKit | IOKit `IOHIDDevice` | `core/`（经 C ABI 链接） | 当前版本（Swift 版尚未切到核心） |
+| macOS | Swift + AppKit | IOKit `IOHIDDevice` | `core/`（静态库，经 C ABI 链接） | 当前版本 |
 | Windows | 原生托盘（待定） | HIDAPI | `core/`（Rust crate 直接依赖） | 计划中；旧 Electron 版可先用 |
 | Linux | 原生托盘（待定） | `hidraw` + `HIDIOCGFEATURE` | `core/` | 计划中 |
 
 协议封包、校验和、电量换算、低电量去重与测试向量已经收拢到 [`core/`](core/README.md)：
-一份 Rust 实现，`#![forbid(unsafe_code)]`、零运行时依赖，通过 `core/vectors/vectors.json`
-与现有的 Swift / JavaScript 实现做三方对拍（`core/scripts/test-all.sh`）。
+一份 Rust 实现，`#![forbid(unsafe_code)]`、零运行时依赖。macOS 应用已经接入它——
+`ATKProtocol` / `RazerProtocol` 只是 FFI 的薄封装，构建时把核心静态链接进 bundle。
+测试向量 `core/vectors/vectors.json` 仍由 Rust / Swift / JavaScript 三方回放
+（`core/scripts/test-all.sh`）。
 
 现有 Electron 代码保留，作为 Windows 过渡实现和对照参考，不再作为 macOS 的发布形态。
 

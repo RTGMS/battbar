@@ -47,6 +47,9 @@ ARCH="$(uname -m)"
 TARGET="${ARCH}-apple-macos13.0"
 
 echo "==> 编译真机测试程序" >&2
+# Remove any previous binary first: a failed compile must not silently run a
+# stale executable.
+rm -f "$OUT/hardware-test"
 HOME="$OUT/.cache/home" swiftc -Onone \
   -sdk "$SDK" -target "$TARGET" \
   -module-cache-path "$OUT/.cache/clang" \

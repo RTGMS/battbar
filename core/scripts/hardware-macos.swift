@@ -18,8 +18,8 @@ import Foundation
 import IOKit.hid
 
 // C status codes, restated because the C macros are not imported into Swift.
-let statusOK: Int32 = 1
-let statusNotForUs: Int32 = 0
+let hwStatusOK: Int32 = 1
+let hwStatusNotForUs: Int32 = 0
 
 var failures = 0
 var checks = 0
@@ -35,6 +35,34 @@ func check(_ condition: Bool, _ message: String) {
 func hexString(_ bytes: [UInt8]) -> String {
     bytes.map { String(format: "%02x", $0) }.joined()
 }
+
+/// Independent reference decoder for the ATK report.
+///
+/// The app itself now calls the Rust core, so comparing the core against
+/// `ATKProtocol.decode` would be comparing it with itself. This reimplements the
+/// documented protocol directly from the byte layout, which keeps the hardware
+/// test as a real cross-check.
+func referenceDecodeATK(reportID: UInt8, bytes: [UInt8]) -> (battery: Int, charging: Bool)? {
+    var payload = bytes
+    if payload.first == 0x08 {
+        payload.removeFirst()
+    } else if reportID != 0x08 {
+        return nil
+    }
+    guard payload.count >= 7, payload[0] == 0x04, payload[1] == 0 else { return nil }
+    return (battery: min(100, max(0, Int(payload[5]))), charging: payload[6] == 1)
+}
+
+/// The request the protocol defines, written out by hand (17 bytes).
+let referenceRequest: [UInt8] = {
+    var packet = [UInt8](repeating: 0, count: 17)
+    packet[0] = 0x08
+    packet[1] = 0x04
+    var sum = 0
+    for byte in packet[0..<16] { sum += Int(byte) }
+    packet[16] = UInt8((0x55 - (sum & 0xff)) & 0xff)
+    return packet
+}()
 
 // MARK: - Report capture
 
@@ -132,9 +160,11 @@ func testATK() -> Bool {
         battbar_atk_request($0.baseAddress, $0.count)
     }
     check(written == Int32(coreRequest.count), "core request length \(written)")
-    let swiftRequest = ATKProtocol.batteryRequest()
-    check(coreRequest == swiftRequest, "core request \(hexString(coreRequest)) != swift \(hexString(swiftRequest))")
-    print("  请求: \(hexString(coreRequest))（核心与 Swift 一致）")
+    check(
+        coreRequest == referenceRequest,
+        "core request \(hexString(coreRequest)) != reference \(hexString(referenceRequest))"
+    )
+    print("  请求: \(hexString(coreRequest))（与协议定义逐字节一致）")
 
     let iterations = Int(ProcessInfo.processInfo.environment["BATTBAR_HW_ITERATIONS"] ?? "") ?? 5
     var successes = 0
@@ -150,39 +180,40 @@ func testATK() -> Bool {
         }
         let elapsed = Date().timeIntervalSince(started) * 1000
 
-        // Oracle: the shipped Swift decoder.
-        guard case .success(let swiftReading)? = ATKProtocol.decode(reportID: Int(reportID), bytes: bytes) else {
-            check(false, "#\(index + 1) Swift 无法解析 \(hexString(bytes))")
+        // Oracle: the independent reference decoder above.
+        guard let reference = referenceDecodeATK(reportID: UInt8(reportID), bytes: bytes) else {
+            check(false, "#\(index + 1) 参照实现无法解析 \(hexString(bytes))")
             continue
         }
 
         // Subject: the Rust core through the C ABI.
         var rustReading = BattbarReading(battery: 0, charging: 0)
+        var deviceStatus: UInt8 = 0
         let status = bytes.withUnsafeBufferPointer {
-            battbar_atk_decode(UInt8(reportID), $0.baseAddress, $0.count, &rustReading)
+            battbar_atk_decode(UInt8(reportID), $0.baseAddress, $0.count, &rustReading, &deviceStatus)
         }
 
-        check(status == statusOK, "#\(index + 1) 核心返回状态 \(status)")
+        check(status == hwStatusOK, "#\(index + 1) 核心返回状态 \(status)")
         check(
-            Int(rustReading.battery) == Int(swiftReading.battery),
-            "#\(index + 1) 电量不一致：核心 \(rustReading.battery) vs Swift \(swiftReading.battery)"
+            Int(rustReading.battery) == reference.battery,
+            "#\(index + 1) 电量不一致：核心 \(rustReading.battery) vs 参照 \(reference.battery)"
         )
         check(
-            (rustReading.charging == 1) == swiftReading.charging,
-            "#\(index + 1) 充电状态不一致：核心 \(rustReading.charging) vs Swift \(swiftReading.charging)"
+            (rustReading.charging == 1) == reference.charging,
+            "#\(index + 1) 充电状态不一致：核心 \(rustReading.charging) vs 参照 \(reference.charging)"
         )
 
         successes += 1
         decoded.append((Int(rustReading.battery), rustReading.charging == 1))
         print(
             String(
-                format: "  #%d %@  ->  核心 %d%% 充电=%@ · Swift %d%% 充电=%@ · %.1f ms",
+                format: "  #%d %@  ->  核心 %d%% 充电=%@ · 参照 %d%% 充电=%@ · %.1f ms",
                 index + 1,
                 hexString(bytes),
                 Int(rustReading.battery),
                 rustReading.charging == 1 ? "是" : "否",
-                Int(swiftReading.battery),
-                swiftReading.charging ? "是" : "否",
+                reference.battery,
+                reference.charging ? "是" : "否",
                 elapsed
             )
         )
@@ -238,7 +269,7 @@ func testRazer() -> Bool {
 
     var coreRequest = [UInt8](repeating: 0, count: Int(battbar_razer_request_len()))
     let written = coreRequest.withUnsafeMutableBufferPointer {
-        battbar_razer_request(RazerProtocol.batteryCommand, $0.baseAddress, $0.count)
+        battbar_razer_request(RazerProtocol.commandClass, RazerProtocol.batteryCommand, $0.baseAddress, $0.count)
     }
     check(written == Int32(coreRequest.count), "razer core request length \(written)")
     let swiftRequest = RazerProtocol.request(

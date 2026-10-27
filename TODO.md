@@ -99,9 +99,11 @@ x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用
 
 ### 待办
 
-- [ ] macOS 版接入核心：把 `ATKProtocol.swift` / `RazerProtocol.swift` 的实现换成 FFI 调用，保留现有 Swift 测试做回归。
-      ATK 的真机对拍已经做过（30/30 一致），接入后只需重跑 `core/scripts/test-all.sh --hw`。
-      **注意**：接入时设备过滤要换成 `battbar_atk_is_macos_candidate`，不要用 Windows 的 per-collection 规则。
+- [x] macOS 版接入核心（2026-10-27）：`ATKProtocol` / `RazerProtocol` 已改为 FFI 调用，
+      `build-native.sh` 按架构编译静态库并链接；应用自身的 34 项 Swift 测试现在验证的是 Rust 核心。
+      真机：`--probe` 读到 95%，`--self-test` PASS，硬件回环 21 项检查 0 失败。
+- [ ] 蓝牙规则仍未接入核心（`BluetoothProvider` 仍在 Swift 里解析系统 JSON）。
+      要统一需要给 `battbar-core::bluetooth` 加 key/value 风格的 C ABI。
 - [ ] 真机验证后再删除 Swift/JS 里的重复协议实现。
 - [ ] 补齐 `bluetooth` 的 Swift 对拍覆盖面（目前 Swift 侧只覆盖 ATK / Razer / 蓝牙属性）。
 

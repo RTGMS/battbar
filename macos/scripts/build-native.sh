@@ -50,6 +50,42 @@ mkdir -p "$BUILD" "$CACHE/clang" "$CACHE/home"
 SOURCES=()
 while IFS= read -r file; do SOURCES+=("$file"); done < <(find "$SRC" -name '*.swift' | sort)
 
+# The protocol core lives in Rust (core/). Build it as a static library for each
+# architecture and link it into the app, so the bundle stays a single binary with
+# no runtime dependency.
+CORE="$ROOT/../core"
+CORE_INCLUDE="$CORE/battbar-ffi/include/battbar_core.h"
+CORE_LIB_DIR="$BUILD/.core"
+mkdir -p "$CORE_LIB_DIR"
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "找不到 cargo：构建 Rust 核心需要 Rust 工具链（https://rustup.rs）。" >&2
+  exit 1
+fi
+
+rust_target_for() {
+  case "$1" in
+    arm64|aarch64) echo "aarch64-apple-darwin" ;;
+    x86_64) echo "x86_64-apple-darwin" ;;
+    *) echo "$1-apple-darwin" ;;
+  esac
+}
+
+CORE_LIBS=()
+for arch in $ARCHS; do
+  rust_target="$(rust_target_for "$arch")"
+  echo "构建 Rust 核心（${rust_target}）…"
+  cargo build --manifest-path "$CORE/Cargo.toml" --release \
+    --package battbar-ffi --target "$rust_target"
+  CORE_LIBS+=("$CORE/target/$rust_target/release/libbattbar_ffi.a")
+done
+
+if [[ ${#CORE_LIBS[@]} -gt 1 ]]; then
+  lipo -create "${CORE_LIBS[@]}" -output "$CORE_LIB_DIR/libbattbar_ffi.a"
+else
+  cp "${CORE_LIBS[0]}" "$CORE_LIB_DIR/libbattbar_ffi.a"
+fi
+
 BINARIES=()
 for arch in $ARCHS; do
   target="$arch-apple-macos$MIN_MACOS"
@@ -59,6 +95,8 @@ for arch in $ARCHS; do
   HOME="$CACHE/home" swiftc -O -whole-module-optimization \
     -sdk "$SDK" -target "$target" \
     -module-cache-path "$CACHE/clang" \
+    -import-objc-header "$CORE_INCLUDE" \
+    -L "$CORE_LIB_DIR" -lbattbar_ffi \
     "${SOURCES[@]}" -o "$out" \
     -framework IOKit -framework AppKit -framework SwiftUI \
     -framework UserNotifications -framework ServiceManagement
