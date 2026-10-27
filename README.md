@@ -63,9 +63,9 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 构建产物位于 `release/`：
 
-- macOS（Universal，Apple Silicon + Intel）：`BattBar-2.2.0-mac-universal.dmg`
-- macOS 备用压缩包：`BattBar-2.2.0-mac-universal.zip`
-- Windows（x64，旧 Electron 版）：`BattBar-2.2.0-win-x64.exe`
+- macOS（Universal，Apple Silicon + Intel）：`BattBar-2.3.0-mac-universal.dmg`
+- macOS 备用压缩包：`BattBar-2.3.0-mac-universal.zip`
+- Windows（x64，旧 Electron 版）：`BattBar-2.3.0-win-x64.exe`
 - 校验文件：`SHA256SUMS.txt`
 
 macOS 包内应用名为 `BattBar.app`，在 Finder 中显示为 **BattBar**；下载后拖入「应用程序」即可。
@@ -209,8 +209,8 @@ ARCHS=arm64 ./scripts/build-native.sh
 
 ### CI / Release
 
-- `.github/workflows/ci.yml`：push / PR 时跑 macOS 原生协议测试和 Universal 构建；非 PR 构建同时产出 DMG / ZIP，Windows 旧 Electron 版跑测试和安装包构建。
-- `.github/workflows/release.yml`：推送 `v*` tag 时构建 macOS DMG / ZIP、Windows EXE，生成 `SHA256SUMS.txt`，并创建 GitHub Release。
+- `.github/workflows/ci.yml`：不再随 push 自动运行，只在 GitHub Actions 页面手动触发；会跑 macOS 原生测试 / Universal 构建 / DMG / ZIP，以及 Windows 旧 Electron 版测试和安装包构建。
+- `.github/workflows/release.yml`：唯一自动构建入口。推送 `v*` tag 时构建 macOS DMG / ZIP、Windows EXE，生成 `SHA256SUMS.txt`，并创建 GitHub Release。
 - `release/` 已在 `.gitignore` 中忽略，发布产物通过 GitHub Releases 分发，不提交进仓库。
 
 ### 原生版目录

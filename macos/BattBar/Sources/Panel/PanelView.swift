@@ -802,7 +802,7 @@ struct PanelView: View {
                     .frame(width: 36, height: 36)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("BattBar \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.2")")
+                        Text("BattBar \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.3")")
                             .font(.system(size: 10.5, weight: .semibold))
                             .foregroundStyle(Theme.text.opacity(0.88))
                         Text("电量栏 · 原生版 · ATK / Razer / 蓝牙")

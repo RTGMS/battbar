@@ -63,9 +63,9 @@ Power-saving choices:
 
 Artifacts live in `release/`:
 
-- macOS (Universal, Apple Silicon + Intel): `BattBar-2.2.0-mac-universal.dmg`
-- macOS ZIP fallback: `BattBar-2.2.0-mac-universal.zip`
-- Windows x64 (legacy Electron build): `BattBar-2.2.0-win-x64.exe`
+- macOS (Universal, Apple Silicon + Intel): `BattBar-2.3.0-mac-universal.dmg`
+- macOS ZIP fallback: `BattBar-2.3.0-mac-universal.zip`
+- Windows x64 (legacy Electron build): `BattBar-2.3.0-win-x64.exe`
 - Checksums: `SHA256SUMS.txt`
 
 The app inside the DMG is `BattBar.app` and appears as **BattBar** in Finder; drag it into Applications.
@@ -209,8 +209,8 @@ ARCHS=arm64 ./scripts/build-native.sh
 
 ### CI / release
 
-- `.github/workflows/ci.yml`: runs native macOS protocol tests and the Universal build on push / PR; non-PR runs also package DMG / ZIP, while the legacy Windows Electron build runs tests and the installer build.
-- `.github/workflows/release.yml`: on a `v*` tag, builds macOS DMG / ZIP and the Windows EXE, generates `SHA256SUMS.txt`, and creates a GitHub Release.
+- `.github/workflows/ci.yml`: no longer runs on push; trigger it manually from the Actions tab when needed. It runs native macOS tests / Universal build / DMG / ZIP and the legacy Windows Electron tests and installer build.
+- `.github/workflows/release.yml`: the only automatic build path. On a `v*` tag it builds macOS DMG / ZIP and the Windows EXE, generates `SHA256SUMS.txt`, and creates a GitHub Release.
 - `release/` is ignored by Git; artifacts are distributed through GitHub Releases instead of being committed.
 
 ### Native source layout

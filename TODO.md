@@ -259,7 +259,7 @@ macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播�
 - [ ] 英文 UI 本地化（当前面板文案为中文）。
 - [x] 品牌统一：`BattBar.app` / `com.battbar.app` / `BattBar-*` 产物 / 文档与代码全部更新，旧 Electron 版同步改名（2026-10-27）。
 - [ ] Developer ID 签名 + 公证（需要 Apple Developer 账号）。
-- [x] GitHub Actions：`ci.yml`（macOS 原生测试/构建/打包 + Windows 旧版测试/构建）与 `release.yml`（tag 发布 DMG/ZIP/EXE + SHA256 + GitHub Release）。
+- [x] GitHub Actions：`ci.yml` 改为手动触发（macOS 原生测试/构建/打包 + Windows 旧版测试/构建）；`release.yml` 仅在 tag 发布 DMG/ZIP/EXE + SHA256 + GitHub Release。
 
 ---
 
