@@ -217,7 +217,9 @@ final class MenuBarContentView: NSView {
         let body = NSRect(x: x, y: y, width: 10, height: 6)
         let outline = NSBezierPath(roundedRect: body, xRadius: 1.4, yRadius: 1.4)
         outline.lineWidth = 1
-        color.withAlphaComponent(alpha * 0.55).setStroke()
+        // A stale reading still has a level worth showing: draw the same shape,
+        // just muted, so an idle mouse does not read as an empty battery.
+        color.withAlphaComponent(alpha * (stale ? 0.85 : 0.55)).setStroke()
         outline.stroke()
 
         let innerWidth = max(0, (body.width - 3) * min(1, max(0, fraction)))
@@ -227,7 +229,7 @@ final class MenuBarContentView: NSView {
                 xRadius: 0.6,
                 yRadius: 0.6
             )
-            color.withAlphaComponent(alpha * (stale ? 0.45 : 0.95)).setFill()
+            color.withAlphaComponent(alpha * (stale ? 0.55 : 0.95)).setFill()
             fill.fill()
         }
 
@@ -236,13 +238,13 @@ final class MenuBarContentView: NSView {
             xRadius: 0.7,
             yRadius: 0.7
         )
-        color.withAlphaComponent(alpha * 0.55).setFill()
+        color.withAlphaComponent(alpha * (stale ? 0.85 : 0.55)).setFill()
         cap.fill()
     }
 
     private func dotColor(for device: MouseDevice) -> NSColor {
         guard let battery = device.battery else { return .tertiaryLabelColor }
-        if device.isStale { return .tertiaryLabelColor }
+        if device.isStale { return .secondaryLabelColor }
         if battery <= 20 { return .systemRed }
         if battery <= 40 { return .systemOrange }
         return .systemGreen

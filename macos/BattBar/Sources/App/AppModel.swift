@@ -65,7 +65,13 @@ final class AppModel: ObservableObject {
             selectedID: activeDeviceID
         )
 
-        devices = resolved.devices
+        devices = resolved.devices.map { device in
+            var device = device
+            // One dropped query is normal for a sleeping receiver; only keep
+            // showing "上次读数" once the reading is genuinely old.
+            device.isStale = device.retainedReadingIsStale(at: outcome.timestamp)
+            return device
+        }
         issues = outcome.issues
         lastAttempt = outcome.timestamp
         if !fresh.isEmpty {

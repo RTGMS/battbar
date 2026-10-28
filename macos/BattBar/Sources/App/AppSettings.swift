@@ -13,6 +13,17 @@ struct AppSettings: Codable, Equatable {
         if !Self.allowedIntervals.contains(refreshInterval) { refreshInterval = 60 }
         if let selectedDeviceID, selectedDeviceID.count > 512 { self.selectedDeviceID = nil }
     }
+
+    /// The polling interval to actually use. While a shown reading is stale it
+    /// is worth asking again sooner than the user's interval, otherwise a mouse
+    /// that woke up stays dim until the next poll. Never polls faster than the
+    /// user asked for.
+    func effectiveRefreshInterval(hasStaleDevice: Bool) -> Int {
+        guard hasStaleDevice else { return refreshInterval }
+        return min(refreshInterval, Self.stalePollingInterval)
+    }
+
+    static let stalePollingInterval = 60
 }
 
 final class SettingsStore {
