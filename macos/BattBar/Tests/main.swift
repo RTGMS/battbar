@@ -186,6 +186,24 @@ if let defaults = UserDefaults(suiteName: suite) {
     check(false, "无法创建测试 UserDefaults")
 }
 
+// MARK: Retry policy
+
+checkEqual(
+    CoreBridge.retryDelayMilliseconds(hasStaleDevice: true, alreadyRetried: false),
+    15_000,
+    "掉一次读数后 15 秒重试一次"
+)
+checkEqual(
+    CoreBridge.retryDelayMilliseconds(hasStaleDevice: true, alreadyRetried: true),
+    nil as Int?,
+    "重试本身失败不再重试"
+)
+checkEqual(
+    CoreBridge.retryDelayMilliseconds(hasStaleDevice: false, alreadyRetried: false),
+    nil as Int?,
+    "读数正常时不重试"
+)
+
 if failures == 0 {
     print("PASS \(checks) checks")
     exit(0)

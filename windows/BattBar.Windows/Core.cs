@@ -139,6 +139,9 @@ internal static class Core
     internal static extern void battbar_alerts_free(IntPtr manager);
 
     [DllImport(Lib)]
+    internal static extern int battbar_retry_delay_ms(byte hasStale, byte alreadyRetried);
+
+    [DllImport(Lib)]
     internal static extern int battbar_alerts_evaluate(IntPtr manager, IntPtr devices, int count,
         byte enabled, [Out] byte[] outKinds);
 

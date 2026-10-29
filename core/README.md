@@ -13,6 +13,7 @@ core/
 │   ├── src/bluetooth.rs      macOS 属性选择、Windows PnP 校验、鼠标识别
 │   ├── src/battery.rs        百分比归一化与换算
 │   ├── src/alerts.rs         低电量 / 临界提醒去重
+│   ├── src/retry.rs          掉读数后是否值得再试一次（只给策略，不给定时器）
 │   └── tests/vectors.rs      用共享测试向量做的契约测试
 ├── battbar-ffi/            C ABI（staticlib + cdylib），给 macOS Swift 用
 │   ├── include/battbar_core.h

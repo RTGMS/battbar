@@ -975,6 +975,18 @@ pub unsafe extern "C" fn battbar_parse_percent(text: *const std::os::raw::c_char
     }
 }
 
+/// Delay in milliseconds before the single retry of a dropped scan, or `-1`
+/// when the next scheduled poll should be the only remaining attempt.
+///
+/// `has_stale` and `already_retried` are booleans: non-zero means true.
+#[no_mangle]
+pub extern "C" fn battbar_retry_delay_ms(has_stale: u8, already_retried: u8) -> i32 {
+    match battbar_core::retry::retry_delay_ms(has_stale != 0, already_retried != 0) {
+        Some(delay) => delay as i32,
+        None => -1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1096,6 +1108,16 @@ mod tests {
         };
         assert_eq!(result, status::OK);
         assert_eq!(reading.charging, 1);
+    }
+
+    #[test]
+    fn exposes_the_retry_policy() {
+        assert_eq!(
+            battbar_retry_delay_ms(1, 0),
+            battbar_core::retry::RETRY_DELAY_MS as i32
+        );
+        assert_eq!(battbar_retry_delay_ms(1, 1), -1);
+        assert_eq!(battbar_retry_delay_ms(0, 0), -1);
     }
 
     #[test]

@@ -304,6 +304,15 @@ int32_t battbar_alerts_evaluate(BattbarAlertManager *manager,
  */
 int32_t battbar_parse_percent(const char *text);
 
+/**
+ * Delay in milliseconds before the single retry of a dropped scan, or -1 when
+ * the next scheduled poll should be the only remaining attempt.
+ *
+ * @param has_stale        non-zero when the finished scan left a shown reading stale
+ * @param already_retried  non-zero when the finished scan was itself the retry
+ */
+int32_t battbar_retry_delay_ms(uint8_t has_stale, uint8_t already_retried);
+
 #ifdef __cplusplus
 }
 #endif

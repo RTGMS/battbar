@@ -12,6 +12,7 @@ internal sealed class TrayApplication : ApplicationContext
 {
     private readonly NotifyIcon _tray;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly System.Windows.Forms.Timer _retryTimer;
     private readonly Settings _settings;
     private readonly IntPtr _alerts;
 
@@ -20,6 +21,7 @@ internal sealed class TrayApplication : ApplicationContext
     private Icon? _icon;
     private IntPtr _iconHandle;
     private bool _scanning;
+    private bool _retrying;
 
     internal TrayApplication(Settings settings)
     {
@@ -38,6 +40,14 @@ internal sealed class TrayApplication : ApplicationContext
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
 
+        _retryTimer = new System.Windows.Forms.Timer();
+        _retryTimer.Tick += (_, _) =>
+        {
+            _retryTimer.Stop();
+            _retrying = true;
+            Refresh();
+        };
+
         Refresh();
     }
 
@@ -52,6 +62,8 @@ internal sealed class TrayApplication : ApplicationContext
     /// <summary>Scan on a worker thread so the UI never blocks on a sleeping mouse.</summary>
     private void Refresh()
     {
+        // Any scan supersedes a pending retry: it is the same attempt sooner.
+        _retryTimer.Stop();
         if (_scanning)
         {
             return;
@@ -69,6 +81,7 @@ internal sealed class TrayApplication : ApplicationContext
             if (task.IsFaulted)
             {
                 _tray.Text = "电量栏 · 读取失败";
+                ScheduleRetry();
                 return;
             }
 
@@ -77,7 +90,27 @@ internal sealed class TrayApplication : ApplicationContext
             _activeIndex = devices.Count == 0 ? -1 : Math.Clamp(active, 0, devices.Count - 1);
             ApplyIcon();
             Notify();
+            ScheduleRetry();
         }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// <summary>
+    /// One extra scan after a dropped read. The budget and the delay come from
+    /// the core; this only owns the WinForms timer.
+    /// </summary>
+    private void ScheduleRetry()
+    {
+        _retryTimer.Stop();
+        int? delay = CoreDecisions.RetryDelayMilliseconds(
+            _devices.Any(device => device.Stale),
+            _retrying);
+        _retrying = false;
+        if (delay is not int milliseconds)
+        {
+            return;
+        }
+        _retryTimer.Interval = milliseconds;
+        _retryTimer.Start();
     }
 
     private void ApplyIcon()

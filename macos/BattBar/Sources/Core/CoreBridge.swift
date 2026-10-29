@@ -179,6 +179,15 @@ enum CoreBridge {
         return result
     }
 
+    // MARK: - Retry policy
+
+    /// Delay before the single retry of a dropped scan, or nil when the next
+    /// scheduled poll should be the only remaining attempt.
+    static func retryDelayMilliseconds(hasStaleDevice: Bool, alreadyRetried: Bool) -> Int? {
+        let delay = battbar_retry_delay_ms(hasStaleDevice ? 1 : 0, alreadyRetried ? 1 : 0)
+        return delay < 0 ? nil : Int(delay)
+    }
+
     // MARK: - Helpers
 
     /// `system_profiler` hands us typed values; the core wants strings.

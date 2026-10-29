@@ -14,6 +14,7 @@
 //! * [`battery`] – percentage normalisation shared by all providers.
 //! * [`alerts`] – low/critical notification de-duplication.
 //! * [`merge`] – turning one scan into the ordered device list.
+//! * [`retry`] – whether a dropped scan is worth one more attempt.
 //!
 //! The crate is `#![forbid(unsafe_code)]`; the C ABI lives in the separate
 //! `battbar-ffi` crate so that the logic here stays trivially auditable.
@@ -27,6 +28,7 @@ pub mod battery;
 pub mod bluetooth;
 pub mod merge;
 pub mod razer;
+pub mod retry;
 
 /// A battery reading as exposed to the UI layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

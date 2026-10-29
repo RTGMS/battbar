@@ -275,7 +275,7 @@ See [TODO.md](TODO.md#p0-native-windows-app) for the native Windows design, limi
 
 **The menu bar shows `~25%`**
 
-That is the last successful reading. The `~` means it is not fresh; it updates automatically when the mouse wakes.
+That is the last successful reading. The `~` means it is not fresh. A dropped read is retried once after 15 seconds; if that also fails the app waits for the next scheduled poll instead of polling harder. It updates automatically once the mouse wakes.
 
 **The menu bar item disappeared**
 

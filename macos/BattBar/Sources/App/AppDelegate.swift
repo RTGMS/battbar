@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController!
     private var fullscreenMonitor: FullScreenMonitor!
     private var refreshTimer: Timer?
+    private var retryTimer: Timer?
+    private var retrying = false
     private var screenLocked = false
     private var fullscreenCovered = false
 
@@ -57,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        retryTimer?.invalidate()
         fullscreenMonitor.stop()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default.removeObserver(self)
@@ -156,7 +159,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scanner.onScanCompleted = { [weak self] outcome in
             guard let self else { return }
             self.notifications.evaluate(outcome.devices, enabled: self.model.settings.lowBatteryAlerts)
+            self.scheduleRetryIfNeeded()
         }
+    }
+
+    private var hasStaleDevice: Bool {
+        model.devices.contains { $0.isStale }
+    }
+
+    /// One extra scan after a dropped read. The budget and the delay are the
+    /// core's (`core/battbar-core/src/retry.rs`); this only owns the timer.
+    private func scheduleRetryIfNeeded() {
+        let delay = CoreBridge.retryDelayMilliseconds(
+            hasStaleDevice: hasStaleDevice,
+            alreadyRetried: retrying
+        )
+        retrying = false
+        guard let delay else { return }
+        let timer = Timer(timeInterval: TimeInterval(delay) / 1000, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.retrying = true
+            self.refresh()
+        }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        retryTimer = timer
     }
 
     private func setupFullscreen() {
@@ -219,6 +246,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func pauseForEnvironment() {
         refreshTimer?.invalidate()
         refreshTimer = nil
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retrying = false
     }
 
     private func resumeFromEnvironment() {
@@ -242,6 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
+        retryTimer?.invalidate()
+        retryTimer = nil
         scanner.scan(forceBluetooth: false)
     }
 

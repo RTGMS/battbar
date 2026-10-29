@@ -142,6 +142,18 @@ internal static class CoreBridge
 /// <summary>Merge policy and alert decisions, both owned by the core.</summary>
 internal static class CoreDecisions
 {
+    /// <summary>
+    /// Delay before the single retry of a dropped scan, or null when the
+    /// regular poll should be the only remaining attempt.
+    /// </summary>
+    internal static int? RetryDelayMilliseconds(bool hasStale, bool alreadyRetried)
+    {
+        int delay = Core.battbar_retry_delay_ms(
+            hasStale ? (byte)1 : (byte)0,
+            alreadyRetried ? (byte)1 : (byte)0);
+        return delay < 0 ? null : delay;
+    }
+
     /// <summary>Retention, ordering and the active device.</summary>
     internal static (List<DeviceOutcome> Devices, int ActiveIndex) Merge(
         IReadOnlyList<DeviceOutcome> fresh,
