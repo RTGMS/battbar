@@ -87,7 +87,8 @@ final class StatusItemController: NSObject {
 
     private func updateTooltip(devices: [MouseDevice]) {
         let lines = devices.map { device in
-            "\(device.name)：\(device.isStale ? "上次读数 " : "")\(device.batteryText)"
+            let charging = device.charging == true ? "，充电中" : ""
+            return "\(device.name)：\(device.isStale ? "上次读数 " : "")\(device.batteryText)\(charging)"
         }
         statusItem.button?.toolTip = lines.isEmpty ? "电量栏 · 未发现鼠标" : lines.joined(separator: "\n")
         statusItem.button?.setAccessibilityLabel(

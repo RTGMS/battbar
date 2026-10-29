@@ -15,7 +15,7 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 ## Features
 
-- **Device name + battery in the menu bar** — e.g. `ATK 无线鼠标 ● 67%`, with a color that reflects the level.
+- **Device name + battery in the menu bar** — the level is a colored capsule at the right (green >40%, orange ≤40%, red ≤20%). While charging the capsule gains a small bolt and keeps its color.
 - **Horizontal marquee for long names** — names wider than the available menu bar space scroll at 24 pt/s; short names stay still.
 - **Vertical rotation for multiple devices** — switches devices every 5.5 seconds; you can also select one in the panel.
 - **Hide while another app is fullscreen** — hides the status item and pauses polling; restores automatically when fullscreen ends.

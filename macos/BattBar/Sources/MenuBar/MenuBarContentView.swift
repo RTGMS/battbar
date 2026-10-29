@@ -4,7 +4,6 @@ final class MenuBarContentView: NSView {
     static let maxWidth: CGFloat = 198
     static let minWidth: CGFloat = 118
     private static let nameFont = NSFont.systemFont(ofSize: 12.5, weight: .medium)
-    private static let batteryFont = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold)
     private static let emptyFont = NSFont.systemFont(ofSize: 11.5, weight: .regular)
 
     var onToggle: (() -> Void)?
@@ -116,17 +115,20 @@ final class MenuBarContentView: NSView {
     private func updateOverflow() {
         guard let device = currentDevice else { overflow = 0; return }
         let nameWidth = Self.textWidth(device.name, font: Self.nameFont)
-        let batteryWidth = Self.textWidth(device.menuBatteryText, font: Self.batteryFont)
         // Keep the exact same measurement as the clip rect in draw(device:).
-        let nameArea = max(0, bounds.width - 8 - 27 - batteryWidth)
+        let nameArea = max(0, bounds.width - 8 - Self.capsuleWidth(for: device) - 10 - 7)
         overflow = max(0, nameWidth - nameArea + 1)
     }
 
+    /// Width the status item should reserve. The capsule is right-aligned and
+    /// cannot scroll, so it is sized for the widest device in the list: the
+    /// active device can be charging (a bolt wider) or read "100%" while the
+    /// first one reads "9%".
     static func preferredWidth(for devices: [MouseDevice]) -> CGFloat {
         guard let device = devices.first else { return 126 }
         let nameWidth = min(textWidth(device.name, font: nameFont), 132)
-        let batteryWidth = textWidth(device.menuBatteryText, font: batteryFont)
-        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + 5 + 12 + batteryWidth + 8))
+        let capsule = devices.map { capsuleWidth(for: $0) }.max() ?? capsuleWidth(for: device)
+        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + capsule + 8))
         return ceil(width)
     }
 
@@ -162,29 +164,42 @@ final class MenuBarContentView: NSView {
     }
 
     private func draw(device: MouseDevice, yOffset: CGFloat, alpha: CGFloat) {
+        // The level is a filled capsule with the percentage inside it: the colour
+        // reads at a glance and the number stays readable. Charging only adds a
+        // bolt, so the level colour keeps its meaning.
+        let capsule = NSRect(
+            x: bounds.width - 8 - Self.capsuleWidth(for: device),
+            y: (bounds.height - Capsule.height) / 2 + yOffset,
+            width: Self.capsuleWidth(for: device),
+            height: Capsule.height
+        )
+        let fill = device.isStale || device.battery == nil
+            ? NSColor.secondaryLabelColor
+            : Self.levelColor(for: device)
+        fill.withAlphaComponent(alpha * (device.isStale ? 0.55 : 1)).setFill()
+        NSBezierPath(roundedRect: capsule, xRadius: Capsule.height / 2, yRadius: Capsule.height / 2).fill()
+
+        var textX = capsule.minX + Capsule.padding
+        if device.charging == true {
+            drawBolt(
+                in: NSRect(x: textX, y: capsule.midY - Capsule.boltHeight / 2,
+                           width: Capsule.boltWidth, height: Capsule.boltHeight),
+                alpha: alpha
+            )
+            textX += Capsule.boltWidth + Capsule.boltGap
+        }
+
         let batteryText = device.menuBatteryText as NSString
-        let batteryAttributes: [NSAttributedString.Key: Any] = [
-            .font: Self.batteryFont,
-            .foregroundColor: device.isStale ? NSColor.secondaryLabelColor : NSColor.labelColor,
-        ]
-        let batterySize = batteryText.size(withAttributes: batteryAttributes)
-        let batteryX = bounds.width - 8 - batterySize.width
-
-        drawBatteryGlyph(
-            x: batteryX - 17,
-            y: (bounds.height - 6) / 2 + yOffset,
-            fraction: CGFloat(device.battery ?? 0) / 100,
-            color: dotColor(for: device),
-            alpha: alpha,
-            stale: device.isStale
-        )
-
+        let batterySize = batteryText.size(withAttributes: [.font: Capsule.font])
         batteryText.draw(
-            at: NSPoint(x: batteryX, y: (bounds.height - batterySize.height) / 2 + yOffset),
-            withAttributes: batteryAttributes.merging([.foregroundColor: NSColor.labelColor.withAlphaComponent(alpha)]) { _, new in new }
+            at: NSPoint(x: textX, y: capsule.minY + (Capsule.height - batterySize.height) / 2),
+            withAttributes: [
+                .font: Capsule.font,
+                .foregroundColor: NSColor.white.withAlphaComponent(alpha),
+            ]
         )
 
-        let available = max(0, batteryX - 27)
+        let available = max(0, capsule.minX - 10 - 7)
         let nameAttributes: [NSAttributedString.Key: Any] = [
             .font: Self.nameFont,
             .foregroundColor: NSColor.labelColor.withAlphaComponent(alpha),
@@ -206,48 +221,39 @@ final class MenuBarContentView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawBatteryGlyph(
-        x: CGFloat,
-        y: CGFloat,
-        fraction: CGFloat,
-        color: NSColor,
-        alpha: CGFloat,
-        stale: Bool
-    ) {
-        let body = NSRect(x: x, y: y, width: 10, height: 6)
-        let outline = NSBezierPath(roundedRect: body, xRadius: 1.4, yRadius: 1.4)
-        outline.lineWidth = 1
-        // A stale reading still has a level worth showing: keep the same shape,
-        // just muted, so an idle mouse does not read as an empty battery.
-        color.withAlphaComponent(alpha * (stale ? 0.85 : 0.55)).setStroke()
-        outline.stroke()
-
-        let innerWidth = max(0, (body.width - 3) * min(1, max(0, fraction)))
-        if innerWidth > 0 {
-            let fill = NSBezierPath(
-                roundedRect: NSRect(x: body.minX + 1.5, y: body.minY + 1.5, width: innerWidth, height: body.height - 3),
-                xRadius: 0.6,
-                yRadius: 0.6
-            )
-            color.withAlphaComponent(alpha * (stale ? 0.55 : 0.95)).setFill()
-            fill.fill()
-        }
-
-        let cap = NSBezierPath(
-            roundedRect: NSRect(x: body.maxX + 1, y: body.midY - 1.5, width: 1.5, height: 3),
-            xRadius: 0.7,
-            yRadius: 0.7
-        )
-        color.withAlphaComponent(alpha * (stale ? 0.85 : 0.55)).setFill()
-        cap.fill()
+    /// Capsule geometry. `capsuleWidth(for:)` measures with `Capsule.font`, so
+    /// the reserved width and the drawn width cannot drift apart.
+    private enum Capsule {
+        static let font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
+        static let height: CGFloat = 14
+        static let padding: CGFloat = 4.5
+        static let boltWidth: CGFloat = 7
+        static let boltHeight: CGFloat = 9
+        static let boltGap: CGFloat = 2
     }
 
-    private func dotColor(for device: MouseDevice) -> NSColor {
+    /// Width of the capsule for `device`, including the bolt when charging.
+    static func capsuleWidth(for device: MouseDevice) -> CGFloat {
+        let size = (device.menuBatteryText as NSString).size(withAttributes: [.font: Capsule.font])
+        let bolt = device.charging == true ? Capsule.boltWidth + Capsule.boltGap : 0
+        return ceil(size.width + bolt + Capsule.padding * 2)
+    }
+
+    private static func levelColor(for device: MouseDevice) -> NSColor {
         guard let battery = device.battery else { return .tertiaryLabelColor }
-        if device.isStale { return .secondaryLabelColor }
         if battery <= 20 { return .systemRed }
         if battery <= 40 { return .systemOrange }
         return .systemGreen
+    }
+
+    private func drawBolt(in rect: NSRect, alpha: CGFloat) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: Capsule.boltHeight, weight: .bold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor.white.withAlphaComponent(alpha)]))
+        guard let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "充电中")?
+            .withSymbolConfiguration(configuration) else {
+            return
+        }
+        bolt.draw(in: rect)
     }
 
     override func mouseDown(with event: NSEvent) {

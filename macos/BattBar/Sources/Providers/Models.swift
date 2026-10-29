@@ -70,7 +70,8 @@ struct MouseDevice: Identifiable, Equatable {
     }
 
     var accessibilityDescription: String {
-        "\(name)，\(isStale ? "上次读数 " : "")\(batteryText)"
+        let charging = charging == true ? "，充电中" : ""
+        return "\(name)，\(isStale ? "上次读数 " : "")\(batteryText)\(charging)"
     }
 }
 
