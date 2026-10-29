@@ -119,7 +119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelController.onOpen = { [weak self] in
             guard let self else { return }
-            if self.model.lastAttempt == nil || Date().timeIntervalSince(self.model.lastAttempt ?? .distantPast) > 15 {
+            // Opening the panel is a user asking for the current level, so a
+            // stale reading always re-reads; the recency guard only exists to
+            // avoid a second scan right after a scheduled one.
+            let stale = self.model.devices.contains { $0.isStale }
+            if stale
+                || self.model.lastAttempt == nil
+                || Date().timeIntervalSince(self.model.lastAttempt ?? .distantPast) > 15 {
                 self.refresh()
             }
         }
