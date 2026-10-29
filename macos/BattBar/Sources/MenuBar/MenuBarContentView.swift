@@ -116,19 +116,19 @@ final class MenuBarContentView: NSView {
         guard let device = currentDevice else { overflow = 0; return }
         let nameWidth = Self.textWidth(device.name, font: Self.nameFont)
         // Keep the exact same measurement as the clip rect in draw(device:).
-        let nameArea = max(0, bounds.width - 8 - Self.capsuleWidth(for: device) - 10 - 7)
+        let nameArea = max(0, bounds.width - 8 - Self.batteryWidth(for: device) - 10 - 7)
         overflow = max(0, nameWidth - nameArea + 1)
     }
 
-    /// Width the status item should reserve. The capsule is right-aligned and
+    /// Width the status item should reserve. The battery is right-aligned and
     /// cannot scroll, so it is sized for the widest device in the list: the
     /// active device can be charging (a bolt wider) or read "100%" while the
     /// first one reads "9%".
     static func preferredWidth(for devices: [MouseDevice]) -> CGFloat {
         guard let device = devices.first else { return 126 }
         let nameWidth = min(textWidth(device.name, font: nameFont), 132)
-        let capsule = devices.map { capsuleWidth(for: $0) }.max() ?? capsuleWidth(for: device)
-        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + capsule + 8))
+        let battery = devices.map { batteryWidth(for: $0) }.max() ?? batteryWidth(for: device)
+        let width = min(maxWidth, max(minWidth, 8 + nameWidth + 10 + battery + 8))
         return ceil(width)
     }
 
@@ -164,42 +164,75 @@ final class MenuBarContentView: NSView {
     }
 
     private func draw(device: MouseDevice, yOffset: CGFloat, alpha: CGFloat) {
-        // The level is a filled capsule with the percentage inside it: the colour
-        // reads at a glance and the number stays readable. Charging only adds a
-        // bolt, so the level colour keeps its meaning.
-        let capsule = NSRect(
-            x: bounds.width - 8 - Self.capsuleWidth(for: device),
-            y: (bounds.height - Capsule.height) / 2 + yOffset,
-            width: Self.capsuleWidth(for: device),
-            height: Capsule.height
-        )
-        let fill = device.isStale || device.battery == nil
+        // A battery outline in the level colour: the fill inside shows the level,
+        // the percentage sits on top of it, and charging only adds a bolt so the
+        // colour keeps its meaning.
+        let color = device.isStale || device.battery == nil
             ? NSColor.secondaryLabelColor
             : Self.levelColor(for: device)
-        fill.withAlphaComponent(alpha * (device.isStale ? 0.55 : 1)).setFill()
-        NSBezierPath(roundedRect: capsule, xRadius: Capsule.height / 2, yRadius: Capsule.height / 2).fill()
+        let body = NSRect(
+            x: bounds.width - 8 - Self.batteryWidth(for: device),
+            y: (bounds.height - Battery.height) / 2 + yOffset,
+            width: Self.batteryWidth(for: device) - Battery.capGap - Battery.capWidth,
+            height: Battery.height
+        )
+        let outline = NSBezierPath(
+            roundedRect: body,
+            xRadius: Battery.cornerRadius,
+            yRadius: Battery.cornerRadius
+        )
+        outline.lineWidth = 1
+        color.withAlphaComponent(alpha * 0.85).setStroke()
+        outline.stroke()
 
-        var textX = capsule.minX + Capsule.padding
+        // The fill shows the level; it stays translucent because the percentage
+        // is drawn over it and must stay readable at low levels.
+        let fraction = min(1, max(0, CGFloat(device.battery ?? 0) / 100))
+        let fillWidth = max(0, (body.width - 3) * fraction)
+        if fillWidth > 0.5 {
+            let fill = NSBezierPath(
+                roundedRect: NSRect(x: body.minX + 1.5, y: body.minY + 1.5,
+                                    width: fillWidth, height: body.height - 3),
+                xRadius: 1.5,
+                yRadius: 1.5
+            )
+            color.withAlphaComponent(alpha * Battery.fillAlpha).setFill()
+            fill.fill()
+        }
+
+        let cap = NSBezierPath(
+            roundedRect: NSRect(x: body.maxX + Battery.capGap, y: body.midY - Battery.capHeight / 2,
+                                width: Battery.capWidth, height: Battery.capHeight),
+            xRadius: 1,
+            yRadius: 1
+        )
+        color.withAlphaComponent(alpha * 0.85).setFill()
+        cap.fill()
+
+        // The number sits on the fill, which is translucent, so it has to follow
+        // the menu bar: white on the dark bar, label colour on the light one.
+        let ink = NSColor.labelColor.withAlphaComponent(alpha)
+        var textX = body.minX + Battery.padding
         if device.charging == true {
             drawBolt(
-                in: NSRect(x: textX, y: capsule.midY - Capsule.boltHeight / 2,
-                           width: Capsule.boltWidth, height: Capsule.boltHeight),
-                alpha: alpha
+                in: NSRect(x: textX, y: body.midY - Battery.boltHeight / 2,
+                           width: Battery.boltWidth, height: Battery.boltHeight),
+                color: ink
             )
-            textX += Capsule.boltWidth + Capsule.boltGap
+            textX += Battery.boltWidth + Battery.boltGap
         }
 
         let batteryText = device.menuBatteryText as NSString
-        let batterySize = batteryText.size(withAttributes: [.font: Capsule.font])
+        let batterySize = batteryText.size(withAttributes: [.font: Battery.font])
         batteryText.draw(
-            at: NSPoint(x: textX, y: capsule.minY + (Capsule.height - batterySize.height) / 2),
+            at: NSPoint(x: textX, y: body.minY + (Battery.height - batterySize.height) / 2),
             withAttributes: [
-                .font: Capsule.font,
-                .foregroundColor: NSColor.white.withAlphaComponent(alpha),
+                .font: Battery.font,
+                .foregroundColor: ink,
             ]
         )
 
-        let available = max(0, capsule.minX - 10 - 7)
+        let available = max(0, body.minX - 10 - 7)
         let nameAttributes: [NSAttributedString.Key: Any] = [
             .font: Self.nameFont,
             .foregroundColor: NSColor.labelColor.withAlphaComponent(alpha),
@@ -221,22 +254,29 @@ final class MenuBarContentView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    /// Capsule geometry. `capsuleWidth(for:)` measures with `Capsule.font`, so
+    /// Battery geometry. `batteryWidth(for:)` measures with `Battery.font`, so
     /// the reserved width and the drawn width cannot drift apart.
-    private enum Capsule {
-        static let font = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
-        static let height: CGFloat = 14
-        static let padding: CGFloat = 4.5
+    private enum Battery {
+        static let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+        static let height: CGFloat = 15
+        static let padding: CGFloat = 6
         static let boltWidth: CGFloat = 7
         static let boltHeight: CGFloat = 9
         static let boltGap: CGFloat = 2
+        static let cornerRadius: CGFloat = 3
+        /// Nub on the right end, the part that makes it read as a battery.
+        static let capWidth: CGFloat = 2.5
+        static let capGap: CGFloat = 1
+        static let capHeight: CGFloat = 5
+        /// The fill stays translucent: the percentage is drawn on top of it.
+        static let fillAlpha: CGFloat = 0.45
     }
 
-    /// Width of the capsule for `device`, including the bolt when charging.
-    static func capsuleWidth(for device: MouseDevice) -> CGFloat {
-        let size = (device.menuBatteryText as NSString).size(withAttributes: [.font: Capsule.font])
-        let bolt = device.charging == true ? Capsule.boltWidth + Capsule.boltGap : 0
-        return ceil(size.width + bolt + Capsule.padding * 2)
+    /// Width of the battery for `device`, including the bolt when charging.
+    static func batteryWidth(for device: MouseDevice) -> CGFloat {
+        let size = (device.menuBatteryText as NSString).size(withAttributes: [.font: Battery.font])
+        let bolt = device.charging == true ? Battery.boltWidth + Battery.boltGap : 0
+        return ceil(size.width + bolt + Battery.padding * 2 + Battery.capGap + Battery.capWidth)
     }
 
     private static func levelColor(for device: MouseDevice) -> NSColor {
@@ -246,9 +286,10 @@ final class MenuBarContentView: NSView {
         return .systemGreen
     }
 
-    private func drawBolt(in rect: NSRect, alpha: CGFloat) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: Capsule.boltHeight, weight: .bold)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor.white.withAlphaComponent(alpha)]))
+    /// Draws the charging bolt in `color`, matching the percentage next to it.
+    private func drawBolt(in rect: NSRect, color: NSColor) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: Battery.boltHeight, weight: .bold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         guard let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "充电中")?
             .withSymbolConfiguration(configuration) else {
             return

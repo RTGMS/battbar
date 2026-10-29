@@ -66,9 +66,25 @@ enum PreviewRenderer {
         let devices = previewDevices()
         let normalWidth = MenuBarContentView.preferredWidth(for: [devices[0]])
         let longWidth = MenuBarContentView.maxWidth
+        // The bolt makes the battery wider, so its row needs its own measurement.
+        let chargingDevice = MouseDevice(
+            id: "preview-charging",
+            provider: .atk,
+            name: "ATK 无线鼠标",
+            subtitle: "ATK Mouse 1K Dongle",
+            connection: .receiver,
+            source: "ATK HID",
+            battery: 88,
+            charging: true,
+            lastSeen: Date(),
+            isStale: false,
+            hardware: [:]
+        )
+        let chargingWidth = MenuBarContentView.preferredWidth(for: [chargingDevice])
         let rows: [(String, CGFloat, [MouseDevice])] = [
             ("ATK 无线鼠标", normalWidth, [devices[0]]),
             ("Razer Viper V3 Pro", longWidth, [devices[1]]),
+            ("充电中", chargingWidth, [chargingDevice]),
             ("超长设备名称 · 左右滚动演示", MenuBarContentView.maxWidth, [
                 MouseDevice(
                     id: "preview-long",
