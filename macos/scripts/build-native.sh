@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/BattBar/Sources"
 BUILD="$ROOT/build"
 APP="$BUILD/BattBar.app"
-VERSION="${VERSION:-2.4.0}"
+VERSION="${VERSION:-2.4.1}"
 VERSION="${VERSION#v}"
 BUNDLE_ID="com.battbar.app"
 

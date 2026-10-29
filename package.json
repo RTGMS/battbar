@@ -1,6 +1,6 @@
 {
   "name": "battbar",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "BattBar（电量栏）——跨平台无线外设电量托盘应用，已适配 ATK / VXE 等 Compx 方案鼠标。",
   "main": "electron/main.js",
   "private": true,
