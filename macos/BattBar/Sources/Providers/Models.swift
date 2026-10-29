@@ -72,18 +72,6 @@ struct MouseDevice: Identifiable, Equatable {
     var accessibilityDescription: String {
         "\(name)，\(isStale ? "上次读数 " : "")\(batteryText)"
     }
-
-    /// How old a retained reading may be before it stops counting as current.
-    /// The receiver drops the occasional query while the mouse sleeps, and a
-    /// single miss must not turn the menu bar grey for a whole refresh cycle.
-    static let staleGracePeriod: TimeInterval = 150
-
-    /// Whether a reading retained from an earlier scan should be shown as
-    /// stale at `now`. Only readings older than `staleGracePeriod` qualify.
-    func retainedReadingIsStale(at now: Date) -> Bool {
-        guard isStale else { return false }
-        return now.timeIntervalSince(lastSeen) > Self.staleGracePeriod
-    }
 }
 
 struct ProviderIssue: Identifiable, Equatable {

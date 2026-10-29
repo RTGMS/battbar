@@ -275,9 +275,7 @@ See [TODO.md](TODO.md#p0-native-windows-app) for the native Windows design, limi
 
 **The menu bar shows `~25%`**
 
-That is the last successful reading. The `~` means it is not fresh.
-
-The receiver does drop the occasional query while the mouse sleeps, so one missed read does not grey out the number: a reading younger than 2.5 minutes still shows as current. Past that it is marked with `~` and the battery icon turns grey. While marked, the app retries every 60 seconds regardless of the refresh interval, so the display recovers as soon as the mouse wakes.
+That is the last successful reading. The `~` means it is not fresh; it updates automatically when the mouse wakes.
 
 **The menu bar item disappeared**
 

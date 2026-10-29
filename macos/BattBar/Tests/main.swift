@@ -186,45 +186,6 @@ if let defaults = UserDefaults(suiteName: suite) {
     check(false, "无法创建测试 UserDefaults")
 }
 
-// MARK: Stale readings
-
-let staleNow = Date()
-
-func retainedDevice(isStale: Bool, age: TimeInterval) -> MouseDevice {
-    MouseDevice(
-        id: "atk:373b:101a:test",
-        provider: .atk,
-        name: "ATK 无线鼠标",
-        subtitle: "ATK Mouse 1K Dongle",
-        connection: .receiver,
-        source: "ATK HID",
-        battery: 90,
-        charging: false,
-        lastSeen: staleNow.addingTimeInterval(-age),
-        isStale: isStale,
-        hardware: [:]
-    )
-}
-
-check(!retainedDevice(isStale: true, age: 10).retainedReadingIsStale(at: staleNow), "刚漏一次读数不算过期")
-check(retainedDevice(isStale: true, age: 200).retainedReadingIsStale(at: staleNow), "超过宽限期按过期处理")
-check(!retainedDevice(isStale: false, age: 200).retainedReadingIsStale(at: staleNow), "新鲜读数不会被标记过期")
-var recentRetained = retainedDevice(isStale: true, age: 10)
-recentRetained.isStale = recentRetained.retainedReadingIsStale(at: staleNow)
-checkEqual(recentRetained.menuBatteryText, "90%", "宽限期内不加波浪号")
-var oldRetained = retainedDevice(isStale: true, age: 200)
-oldRetained.isStale = oldRetained.retainedReadingIsStale(at: staleNow)
-checkEqual(oldRetained.menuBatteryText, "~90%", "过期读数加波浪号")
-
-// MARK: Polling interval
-
-var staleSettings = AppSettings()
-staleSettings.refreshInterval = 300
-checkEqual(staleSettings.effectiveRefreshInterval(hasStaleDevice: true), 60, "有过期读数时按 60 秒重试")
-checkEqual(staleSettings.effectiveRefreshInterval(hasStaleDevice: false), 300, "读数正常时按用户设置轮询")
-staleSettings.refreshInterval = 30
-checkEqual(staleSettings.effectiveRefreshInterval(hasStaleDevice: true), 30, "不会比用户设置更快")
-
 if failures == 0 {
     print("PASS \(checks) checks")
     exit(0)

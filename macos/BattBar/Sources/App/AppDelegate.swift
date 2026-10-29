@@ -15,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var refreshTimer: Timer?
     private var screenLocked = false
     private var fullscreenCovered = false
-    private var lastStaleState = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -130,13 +129,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onDevicesChanged = { [weak self] in
             guard let self else { return }
             self.statusController.update(devices: self.model.devices)
-            // The poll rate depends on whether a reading is stale, so re-arm
-            // the timer when that flips instead of waiting out the old one.
-            let stale = self.hasStaleDevice
-            if stale != self.lastStaleState {
-                self.lastStaleState = stale
-                self.scheduleRefreshTimer()
-            }
         }
         model.onRefreshRequested = { [weak self] in self?.refresh() }
         model.onQuitRequested = { NSApp.terminate(nil) }
@@ -234,17 +226,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTimer = nil
         guard !screenLocked else { return }
         if fullscreenCovered && model.settings.hideWhenFullscreen { return }
-        let interval = TimeInterval(model.settings.effectiveRefreshInterval(hasStaleDevice: hasStaleDevice))
+        let interval = TimeInterval(model.settings.refreshInterval)
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
         timer.tolerance = max(1, interval * 0.12)
         RunLoop.main.add(timer, forMode: .common)
         refreshTimer = timer
-    }
-
-    private var hasStaleDevice: Bool {
-        model.devices.contains { $0.isStale }
     }
 
     private func refresh() {
