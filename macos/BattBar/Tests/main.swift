@@ -234,6 +234,34 @@ let razerEmpty = CoreBridge.razerDisplayName(product: "", productID: 0x1234)
 checkEqual(razerEmpty.name, "Razer 无线鼠标", "空 Razer 产品串回退")
 checkEqual(razerEmpty.subtitle, "Razer HyperPolling", "空 Razer 产品串的副标题")
 
+// MARK: Device ids (also a core rule: same format as the legacy app)
+
+checkEqual(
+    CoreBridge.atkDeviceID(
+        vendorID: 0x373b,
+        productID: 0x101a,
+        serialNumber: "ABC",
+        product: "ATK Mouse 1K Dongle"
+    ),
+    "atk:373b:101a:ABC",
+    "ATK 有序列号时用序列号"
+)
+checkEqual(
+    CoreBridge.atkDeviceID(
+        vendorID: 0x373b,
+        productID: 0x101a,
+        serialNumber: "",
+        product: "ATK Mouse 1K Dongle"
+    ),
+    "atk:373b:101a:536b2ba7",
+    "ATK 无序列号时用产品指纹"
+)
+checkEqual(
+    CoreBridge.razerDeviceID(vendorID: 0x1532, productID: 0x00C1),
+    "razer:1532:c1",
+    "Razer 用十六进制 vid:pid"
+)
+
 if failures == 0 {
     print("PASS \(checks) checks")
     exit(0)

@@ -140,7 +140,7 @@ final class RazerProvider {
         // Known models and the "型号未知" fallback are core rules.
         let display = CoreBridge.razerDisplayName(product: descriptor.product, productID: descriptor.productID)
         return MouseDevice(
-            id: "razer:\(descriptor.vendorID):\(descriptor.productID)",
+            id: CoreBridge.razerDeviceID(vendorID: descriptor.vendorID, productID: descriptor.productID),
             provider: .razer,
             name: display.name,
             subtitle: display.subtitle,

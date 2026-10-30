@@ -219,12 +219,12 @@ pub fn make_display_name(product: &str) -> DisplayName {
         };
     }
 
-    let stripped = strip_dongle_suffix(value);
+    // Not a receiver, so the product string is the mouse itself.
     DisplayName {
-        name: if stripped.is_empty() {
+        name: if value.is_empty() {
             format!("{brand} 无线鼠标")
         } else {
-            stripped
+            value.to_string()
         },
         subtitle: if value.is_empty() {
             format!("{brand} HID")
@@ -244,39 +244,6 @@ fn brand_from_product(product: &str) -> &'static str {
     } else {
         "ATK"
     }
-}
-
-/// Remove a trailing `2K Wireless Dongle` style suffix.
-fn strip_dongle_suffix(value: &str) -> String {
-    let lower = value.to_ascii_lowercase();
-    let Some(position) = lower.rfind("dongle") else {
-        return value.to_string();
-    };
-    // Only strip when "dongle" is the last word.
-    if position + "dongle".len() != lower.len() {
-        return value.to_string();
-    }
-    let head = &value[..position];
-    let trimmed = head.trim_end();
-    // Drop a trailing speed/size token such as "1K", "2k", "4K", "8K".
-    let without_speed = match trimmed.rsplit_once(' ') {
-        Some((rest, last)) if is_speed_token(last) => rest.trim_end(),
-        _ => trimmed,
-    };
-    let without_wireless = match without_speed.rsplit_once(' ') {
-        Some((rest, last)) if last.eq_ignore_ascii_case("wireless") => rest.trim_end(),
-        _ => without_speed,
-    };
-    without_wireless.trim_end().to_string()
-}
-
-fn is_speed_token(token: &str) -> bool {
-    let bytes = token.as_bytes();
-    (2..=3).contains(&bytes.len())
-        && bytes
-            .last()
-            .is_some_and(|last| *last == b'k' || *last == b'K')
-        && bytes[..bytes.len() - 1].iter().all(u8::is_ascii_digit)
 }
 
 /// Stable identifier for the user's saved device selection.
@@ -507,10 +474,12 @@ mod tests {
         let vxe = make_display_name("VXE R1 Pro Dongle");
         assert_eq!(vxe.name, "VXE 无线鼠标");
 
-        // A receiver-less product string keeps its own name minus the suffix.
-        let stripped = make_display_name("ATK Mouse 4K Wireless Dongle");
-        assert_eq!(stripped.name, "ATK 无线鼠标");
+        // A string that mentions a receiver is treated as one, whatever else it
+        // says: the mouse model is not in it.
+        let suffix = make_display_name("ATK Mouse 4K Wireless Dongle");
+        assert_eq!(suffix.name, "ATK 无线鼠标");
 
+        // Without a receiver word the string is the mouse itself.
         let plain = make_display_name("MAD R 8K");
         assert_eq!(plain.name, "MAD R 8K");
     }

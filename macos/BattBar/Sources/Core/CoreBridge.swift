@@ -115,6 +115,46 @@ enum CoreBridge {
         return DisplayName(name: String(cString: name), subtitle: String(cString: subtitle))
     }
 
+    /// Stable id for an ATK receiver.
+    ///
+    /// The format is a core rule: the serial number when the receiver has one,
+    /// otherwise a short product fingerprint. It matches the id the legacy app
+    /// wrote, so a saved selection survives the upgrade.
+    static func atkDeviceID(vendorID: Int, productID: Int, serialNumber: String, product: String) -> String {
+        var buffer = [CChar](repeating: 0, count: 128)
+        let written = serialNumber.withCString { serialPointer in
+            product.withCString { productPointer in
+                buffer.withUnsafeMutableBufferPointer {
+                    battbar_atk_device_id(
+                        UInt16(truncatingIfNeeded: vendorID),
+                        UInt16(truncatingIfNeeded: productID),
+                        serialPointer,
+                        productPointer,
+                        $0.baseAddress,
+                        $0.count
+                    )
+                }
+            }
+        }
+        precondition(written > 0, "battbar_atk_device_id returned \(written)")
+        return String(cString: buffer)
+    }
+
+    /// Stable id for a Razer receiver.
+    static func razerDeviceID(vendorID: Int, productID: Int) -> String {
+        var buffer = [CChar](repeating: 0, count: 128)
+        let written = buffer.withUnsafeMutableBufferPointer {
+            battbar_razer_device_id(
+                UInt16(truncatingIfNeeded: vendorID),
+                UInt16(truncatingIfNeeded: productID),
+                $0.baseAddress,
+                $0.count
+            )
+        }
+        precondition(written > 0, "battbar_razer_device_id returned \(written)")
+        return String(cString: buffer)
+    }
+
     // MARK: - Scan merge
 
     struct MergedDevices {

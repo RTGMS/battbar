@@ -124,10 +124,14 @@ final class AtkProvider {
     private static func makeDevice(descriptor: HIDDeviceDescriptor, reading: ATKReading) -> MouseDevice {
         // Brand, dongle detection and the "型号未知" fallback are core rules.
         let display = CoreBridge.atkDisplayName(product: descriptor.product)
-        let serial = descriptor.serialNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        let idSuffix = serial.isEmpty ? String(format: "%04x-%04x", descriptor.vendorID, descriptor.productID) : serial
+        let id = CoreBridge.atkDeviceID(
+            vendorID: descriptor.vendorID,
+            productID: descriptor.productID,
+            serialNumber: descriptor.serialNumber,
+            product: descriptor.product
+        )
         return MouseDevice(
-            id: "atk:\(descriptor.vendorID):\(descriptor.productID):\(idSuffix)",
+            id: id,
             provider: .atk,
             name: display.name,
             subtitle: display.subtitle,
