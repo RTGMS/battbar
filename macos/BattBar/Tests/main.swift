@@ -204,6 +204,36 @@ checkEqual(
     "读数正常时不重试"
 )
 
+// MARK: Naming (the rule lives in the core, reached through the C ABI)
+
+let dongle = CoreBridge.atkDisplayName(product: "ATK Mouse 1K Dongle")
+checkEqual(dongle.name, "ATK 无线鼠标", "接收器产品串回退为品牌 + 无线鼠标")
+checkEqual(dongle.subtitle, "ATK Mouse 1K Dongle", "原始产品串保留为副标题")
+checkEqual(CoreBridge.atkDisplayName(product: "VXE R1 Pro Dongle").name, "VXE 无线鼠标", "VXE 接收器品牌")
+checkEqual(CoreBridge.atkDisplayName(product: "MAD R 8K").name, "MAD R 8K", "没有 dongle 字样的产品串原样显示")
+checkEqual(
+    CoreBridge.atkDisplayName(product: "ATK Mouse 2K 接收器").name,
+    "ATK 无线鼠标",
+    "中文「接收器」也按接收器处理"
+)
+let atkEmpty = CoreBridge.atkDisplayName(product: "")
+checkEqual(atkEmpty.name, "ATK 无线鼠标", "空产品串回退")
+checkEqual(atkEmpty.subtitle, "ATK HID", "空产品串的副标题")
+
+checkEqual(
+    CoreBridge.razerDisplayName(product: "Razer DeathAdder V3 Pro", productID: 0x1234).name,
+    "Razer DeathAdder V3 Pro",
+    "已知 Razer 产品串原样显示"
+)
+checkEqual(
+    CoreBridge.razerDisplayName(product: "Razer HyperPolling Wireless Dongle", productID: 0x00C1).name,
+    "Razer Viper V3 Pro",
+    "按 PID 认出 Viper V3 Pro"
+)
+let razerEmpty = CoreBridge.razerDisplayName(product: "", productID: 0x1234)
+checkEqual(razerEmpty.name, "Razer 无线鼠标", "空 Razer 产品串回退")
+checkEqual(razerEmpty.subtitle, "Razer HyperPolling", "空 Razer 产品串的副标题")
+
 if failures == 0 {
     print("PASS \(checks) checks")
     exit(0)

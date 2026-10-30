@@ -122,21 +122,15 @@ final class AtkProvider {
     }
 
     private static func makeDevice(descriptor: HIDDeviceDescriptor, reading: ATKReading) -> MouseDevice {
-        let product = descriptor.product.isEmpty ? "ATK Mouse" : descriptor.product
-        let brand: String
-        if product.localizedCaseInsensitiveContains("vxe") { brand = "VXE" }
-        else if product.localizedCaseInsensitiveContains("mad") { brand = "MAD" }
-        else { brand = "ATK" }
-        let isDongle = product.localizedCaseInsensitiveContains("dongle")
-            || product.localizedCaseInsensitiveContains("receiver")
-        let displayName = isDongle ? "\(brand) 无线鼠标" : product
+        // Brand, dongle detection and the "型号未知" fallback are core rules.
+        let display = CoreBridge.atkDisplayName(product: descriptor.product)
         let serial = descriptor.serialNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         let idSuffix = serial.isEmpty ? String(format: "%04x-%04x", descriptor.vendorID, descriptor.productID) : serial
         return MouseDevice(
             id: "atk:\(descriptor.vendorID):\(descriptor.productID):\(idSuffix)",
             provider: .atk,
-            name: displayName,
-            subtitle: product,
+            name: display.name,
+            subtitle: display.subtitle,
             connection: .receiver,
             source: "ATK HID",
             battery: reading.battery,
@@ -146,7 +140,7 @@ final class AtkProvider {
             hardware: [
                 "vid": String(format: "0x%04X", descriptor.vendorID),
                 "pid": String(format: "0x%04X", descriptor.productID),
-                "product": product,
+                "product": descriptor.product,
                 "usagePage": String(format: "0x%04X", descriptor.primaryUsagePage),
             ]
         )

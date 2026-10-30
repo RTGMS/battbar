@@ -137,23 +137,13 @@ final class RazerProvider {
     }
 
     private static func makeDevice(descriptor: HIDDeviceDescriptor, reading: RazerReading) -> MouseDevice {
-        let product = descriptor.product.isEmpty ? "Razer Wireless Mouse" : descriptor.product
-        let displayName: String
-        if product.localizedCaseInsensitiveContains("viper v3 pro") {
-            displayName = "Razer Viper V3 Pro"
-        } else if descriptor.productID == 0x00C1 {
-            displayName = "Razer Viper V3 Pro"
-        } else if !product.isEmpty, !product.localizedCaseInsensitiveContains("dongle"),
-                  !product.localizedCaseInsensitiveContains("receiver") {
-            displayName = product
-        } else {
-            displayName = "Razer 无线鼠标"
-        }
+        // Known models and the "型号未知" fallback are core rules.
+        let display = CoreBridge.razerDisplayName(product: descriptor.product, productID: descriptor.productID)
         return MouseDevice(
             id: "razer:\(descriptor.vendorID):\(descriptor.productID)",
             provider: .razer,
-            name: displayName,
-            subtitle: product,
+            name: display.name,
+            subtitle: display.subtitle,
             connection: .receiver,
             source: "Razer HID",
             battery: reading.battery,
@@ -163,7 +153,7 @@ final class RazerProvider {
             hardware: [
                 "vid": String(format: "0x%04X", descriptor.vendorID),
                 "pid": String(format: "0x%04X", descriptor.productID),
-                "product": product,
+                "product": descriptor.product,
                 "transaction": String(format: "0x%02X", RazerProtocol.transactionID),
             ]
         )

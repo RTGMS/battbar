@@ -61,6 +61,60 @@ enum CoreBridge {
         ) == 1
     }
 
+    // MARK: - Naming
+
+    struct DisplayName: Equatable {
+        let name: String
+        let subtitle: String
+    }
+
+    /// Human-facing name and subtitle for an ATK product string.
+    ///
+    /// The receiver only reports its own product string, so deciding whether the
+    /// mouse model is known, and falling back to "品牌 + 无线鼠标", is a core
+    /// rule; this marshals the two output buffers only.
+    static func atkDisplayName(product: String) -> DisplayName {
+        var name = [CChar](repeating: 0, count: 256)
+        var subtitle = [CChar](repeating: 0, count: 256)
+        let written = product.withCString { productPointer in
+            name.withUnsafeMutableBufferPointer { nameBuffer in
+                subtitle.withUnsafeMutableBufferPointer { subtitleBuffer in
+                    battbar_atk_display_name(
+                        productPointer,
+                        nameBuffer.baseAddress,
+                        nameBuffer.count,
+                        subtitleBuffer.baseAddress,
+                        subtitleBuffer.count
+                    )
+                }
+            }
+        }
+        precondition(written >= 0, "battbar_atk_display_name returned \(written)")
+        return DisplayName(name: String(cString: name), subtitle: String(cString: subtitle))
+    }
+
+    /// Human-facing name and subtitle for a Razer product string.
+    static func razerDisplayName(product: String, productID: Int) -> DisplayName {
+        var name = [CChar](repeating: 0, count: 256)
+        var subtitle = [CChar](repeating: 0, count: 256)
+        let written = product.withCString { productPointer in
+            name.withUnsafeMutableBufferPointer { nameBuffer in
+                subtitle.withUnsafeMutableBufferPointer { subtitleBuffer in
+                    battbar_razer_display_name(
+                        productPointer,
+                        UInt16(truncatingIfNeeded: productID),
+                        nameBuffer.baseAddress,
+                        nameBuffer.count,
+                        subtitleBuffer.baseAddress,
+                        subtitleBuffer.count
+                    )
+                }
+            }
+        }
+        precondition(written >= 0, "battbar_razer_display_name returned \(written)")
+        return DisplayName(name: String(cString: name), subtitle: String(cString: subtitle))
+    }
+
     // MARK: - Scan merge
 
     struct MergedDevices {
