@@ -1,18 +1,18 @@
 # BattBar TODO / 待办与硬件验证
 
-更新：2026-10-27
+更新：2026-10-30
 状态图例：`P0` 阻塞发布 · `P1` 重要但不阻塞 · `P2` 后续
 
 当前只剩两类真机验证没有完成：
 
 - **Razer Viper V3 Pro 2.4G**：代码已完成，没有设备，未做硬件回归。
-- **Windows 原生版**：UI 骨架未开始；协议核心已完成（见下方 P0 · Rust 协议核心）。
+- **Windows 原生版**：C# 托盘版代码已完成，但一次都没在 Windows 上跑过；协议核心已完成（见下方 P0 · Windows 原生版）。
 
 macOS 的 ATK 2.4G 已真机验证。菜单栏长名称滚动、多设备轮播、全屏隐藏已做组件/模拟验证，但还没有真实多鼠标、真实全屏 App 的完整回归。
 
 架构决定（2026-10-27）：**UI 按平台分开，协议核心统一用 Rust**。macOS 继续用 Swift/AppKit，
-Windows 用 Rust，两端共用 [`core/`](core/README.md)。已经验证：`cargo check --target
-x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用。
+Windows 用 C# / WinForms，两端共用 [`core/`](core/README.md)。已经验证：`cargo check --target
+x86_64-pc-windows-msvc` 与 `dotnet build` 在 macOS 上可通过，C ABI 可从 Swift 正常调用。
 
 
 ## 换电脑后先做这 4 步
@@ -274,6 +274,32 @@ x86_64-pc-windows-msvc` 在 macOS 上可通过，C ABI 可从 Swift 正常调用
 - [ ] 高 DPI（125%/150%/200%）下图标与菜单。
 - [ ] 空闲内存/CPU 实测（目标 < 40 MB；.NET + WinForms 预计 30–50 MB）。
 - [ ] 无管理员权限运行、卸载残留、开机启动注册与注销。
+
+### 已知问题（2026-10-30 审计，等 Windows 机器上处理）
+
+- [ ] **重叠 I/O 的缓冲区生命周期**（`Hid.cs:308`）：`ReadFile` 用的是托管 `byte[]` 和栈上 `OVERLAPPED`，
+      `ERROR_IO_PENDING` 之后超时分支只 `CancelIoEx` 就返回，不等 IRP 完成；驱动仍会往那块缓冲写回长度。
+      鼠标静音时 ATK 读取每轮都走这条分支。改法：`GCHandle.Alloc(..., GCHandleType.Pinned)`（或非托管缓冲）+
+      `AllocHGlobal` 的 `OVERLAPPED`，取消后用 `GetOverlappedResult(..., true)` 等完成再释放。
+      验证：`gflags /p /enable BattBar.exe /full` 开页堆，鼠标休眠状态下反复刷新看有没有堆破坏报告。
+- [ ] **`ScanResult.Issues` 只写不读**（`Providers.cs:38`，写入点 `:62`/`:80`）：「请唤醒鼠标」「可能被 ATK HUB 占用」
+      「无法枚举 HID 设备」这些提示永远不会显示，用户只看到「未发现鼠标」。要先定显示位置（tooltip / 气泡）。
+- [ ] **`Settings.Save()` 吞掉所有写入异常**（`Settings.cs:56`）：目录不可写时菜单勾选与磁盘静默不一致；
+      `Autostart.Set()` 写注册表和写 JSON 是两次独立写入，可能一边成功一边失败。
+- [ ] **Razer command class 仍硬编码 `0x07`**（`Providers.cs:226`）：核心没导出 getter，要加
+      `battbar_razer_command_class()` 才能像 ATK 那样彻底去掉副本。
+
+### 2026-10-30 已修（还没在 Windows 上跑过）
+
+- [x] 启动就退出：构造函数在 `Application.Run` 之前调 `Refresh()`，而 `Refresh()` 在
+      `TaskScheduler.FromCurrentSynchronizationContext()` 处因 `SynchronizationContext.Current == null`
+      抛 `InvalidOperationException`，异常穿出 `Main`，托盘图标永远不出现（`TrayApplication.cs:108`）。
+      首次扫描改为 `Application.Idle` 触发。**真机上先确认这一条：托盘图标要出现。**
+- [x] 每轮扫描泄漏两个 CoTaskMem 字符串（`CoreBridge.cs:224` 的 `BuildSummaries` 只释放了结构体数组）。
+- [x] 每次右键泄漏一个 `ContextMenuStrip`；`_retryTimer` 也从未 `Dispose`（`TrayApplication.cs:173`、`:269`）。
+- [x] 重试预算被吞：重试到点时若有扫描在飞，`_retrying` 置真后提前返回，那次在飞的扫描以「已重试」结束，
+      15 秒复查丢失（`TrayApplication.cs:82`）。
+- [x] ATK report id 改为问核心（`battbar_atk_report_id()`，`Providers.cs:140`）。
 
 ## P1 · macOS 剩余收尾
 
