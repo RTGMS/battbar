@@ -20,6 +20,7 @@ internal sealed class TrayApplication : ApplicationContext
     private int _activeIndex;
     private Icon? _icon;
     private IntPtr _iconHandle;
+    private ContextMenuStrip? _menu;
     private bool _scanning;
     private bool _retrying;
 
@@ -48,6 +49,16 @@ internal sealed class TrayApplication : ApplicationContext
             Refresh();
         };
 
+        // The first scan cannot start here: TaskScheduler's
+        // FromCurrentSynchronizationContext() needs the WinForms context, which
+        // only exists once Application.Run is pumping messages. Idle fires then.
+        Application.Idle += OnFirstIdle;
+    }
+
+    /// <summary>Runs the first scan as soon as the message loop is idle.</summary>
+    private void OnFirstIdle(object? sender, EventArgs e)
+    {
+        Application.Idle -= OnFirstIdle;
         Refresh();
     }
 
@@ -66,6 +77,9 @@ internal sealed class TrayApplication : ApplicationContext
         _retryTimer.Stop();
         if (_scanning)
         {
+            // This attempt never ran, so hand the retry budget back instead of
+            // letting the scan in flight consume it.
+            _retrying = false;
             return;
         }
         _scanning = true;
@@ -154,7 +168,11 @@ internal sealed class TrayApplication : ApplicationContext
 
     private void ShowMenu()
     {
+        // A ContextMenuStrip is a Component: the previous one must be disposed,
+        // otherwise every right-click leaks a menu with its GDI handles.
+        _menu?.Dispose();
         var menu = new ContextMenuStrip();
+        _menu = menu;
 
         if (_devices.Count == 0)
         {
@@ -247,6 +265,9 @@ internal sealed class TrayApplication : ApplicationContext
         {
             _timer.Stop();
             _timer.Dispose();
+            _retryTimer.Stop();
+            _retryTimer.Dispose();
+            _menu?.Dispose();
             _tray.Visible = false;
             _tray.Dispose();
             _icon?.Dispose();

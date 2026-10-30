@@ -487,7 +487,8 @@ mod tests {
     #[test]
     fn stable_id_matches_the_legacy_electron_format() {
         // Captured from the shipped Electron implementation:
-        // sha1("15163:4122:ATK Mouse 1K Dongle")[..8] == "536b2ba7"
+        // sha1("14139:4122:ATK Mouse 1K Dongle")[..8] == "536b2ba7"
+        // (14139 / 4122 are the decimal vendor / product ids, as in the legacy app)
         assert_eq!(stable_device_id(&dongle()), "atk:373b:101a:536b2ba7");
     }
 

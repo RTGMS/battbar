@@ -431,7 +431,9 @@ pub struct BattbarMergedDevice {
 ///
 /// `out_entries` must have room for `fresh_count + previous_count` entries;
 /// `out_count` and `out_active` receive the entry count and the index of the
-/// active device (`-1` when there is none). Returns 0 or an error code.
+/// active device (`-1` when there is none). An unknown provider or connection
+/// code returns [`status::ERROR_INVALID_ARGUMENT`] rather than silently
+/// reordering the entries. Returns 0 or an error code.
 ///
 /// # Safety
 /// All slices must be valid for their advertised lengths.
@@ -471,14 +473,14 @@ pub unsafe extern "C" fn battbar_merge_scan(
                    count: i32,
                    ids: &mut Vec<String>,
                    names: &mut Vec<String>|
-     -> Vec<(u8, u8)> {
+     -> Vec<(i32, i32)> {
         let mut kinds = Vec::new();
         for index in 0..count as usize {
             // SAFETY: the caller guarantees `count` readable entries.
             let entry = unsafe { &*entries.add(index) };
             ids.push(unsafe { c_str_or_empty(entry.id) }.to_string());
             names.push(unsafe { c_str_or_empty(entry.name) }.to_string());
-            kinds.push((entry.provider as u8, entry.connection as u8));
+            kinds.push((entry.provider, entry.connection));
         }
         kinds
     };
@@ -490,6 +492,20 @@ pub unsafe extern "C" fn battbar_merge_scan(
         &mut previous_ids,
         &mut previous_names,
     );
+
+    // An unknown code would drop its entry when the summaries are built, and
+    // the entries after it would shift onto the wrong device, so refuse the
+    // whole scan instead of returning indices the caller cannot trust.
+    if fresh_kinds
+        .iter()
+        .chain(previous_kinds.iter())
+        .any(|(provider, connection)| {
+            battbar_core::merge::Provider::from_code(*provider).is_none()
+                || battbar_core::merge::Connection::from_code(*connection).is_none()
+        })
+    {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
 
     let fresh_summaries = to_summaries(&fresh_ids, &fresh_names, &fresh_kinds);
     let previous_summaries = to_summaries(&previous_ids, &previous_names, &previous_kinds);
@@ -861,10 +877,12 @@ pub unsafe extern "C" fn battbar_alerts_evaluate(
 }
 
 /// Pair ids/names with their provider/connection codes for the merge policy.
+///
+/// The codes are already validated by the caller, so nothing is dropped here.
 fn to_summaries<'a>(
     ids: &'a [String],
     names: &'a [String],
-    kinds: &'a [(u8, u8)],
+    kinds: &'a [(i32, i32)],
 ) -> Vec<battbar_core::merge::DeviceSummary<'a>> {
     ids.iter()
         .zip(names.iter())
@@ -873,8 +891,8 @@ fn to_summaries<'a>(
             Some(battbar_core::merge::DeviceSummary {
                 id: id.as_str(),
                 name: name.as_str(),
-                provider: battbar_core::merge::Provider::from_code(i32::from(*provider))?,
-                connection: battbar_core::merge::Connection::from_code(i32::from(*connection))?,
+                provider: battbar_core::merge::Provider::from_code(*provider)?,
+                connection: battbar_core::merge::Connection::from_code(*connection)?,
             })
         })
         .collect()
@@ -1118,6 +1136,93 @@ mod tests {
         );
         assert_eq!(battbar_retry_delay_ms(1, 1), -1);
         assert_eq!(battbar_retry_delay_ms(0, 0), -1);
+    }
+
+    #[test]
+    fn merge_rejects_unknown_codes() {
+        let ids = [CString::new("a").unwrap(), CString::new("b").unwrap()];
+        let names = [CString::new("A").unwrap(), CString::new("B").unwrap()];
+        let fresh = [
+            BattbarDeviceSummary {
+                id: ids[0].as_ptr(),
+                name: names[0].as_ptr(),
+                provider: 0,
+                connection: 0,
+            },
+            // Unknown provider: the caller must be told, not silently reordered.
+            BattbarDeviceSummary {
+                id: ids[1].as_ptr(),
+                name: names[1].as_ptr(),
+                provider: 9,
+                connection: 0,
+            },
+        ];
+        let mut entries = [BattbarMergedDevice::default(); 2];
+        let mut count = 0i32;
+        let mut active = -1i32;
+        // SAFETY: the arrays are valid for their advertised lengths.
+        let result = unsafe {
+            battbar_merge_scan(
+                fresh.as_ptr(),
+                fresh.len() as i32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                entries.as_mut_ptr(),
+                &mut count,
+                &mut active,
+            )
+        };
+        assert_eq!(result, status::ERROR_INVALID_ARGUMENT);
+    }
+
+    #[test]
+    fn merge_maps_entries_back_to_the_inputs() {
+        let ids = [
+            CString::new("razer:1532:c1").unwrap(),
+            CString::new("atk:373b:101a:x").unwrap(),
+        ];
+        let names = [CString::new("Razer").unwrap(), CString::new("ATK").unwrap()];
+        // Deliberately out of order: the core sorts ATK before Razer.
+        let fresh = [
+            BattbarDeviceSummary {
+                id: ids[0].as_ptr(),
+                name: names[0].as_ptr(),
+                provider: 1,
+                connection: 0,
+            },
+            BattbarDeviceSummary {
+                id: ids[1].as_ptr(),
+                name: names[1].as_ptr(),
+                provider: 0,
+                connection: 0,
+            },
+        ];
+        let mut entries = [BattbarMergedDevice::default(); 2];
+        let mut count = 0i32;
+        let mut active = -1i32;
+        // SAFETY: the arrays are valid for their advertised lengths.
+        let result = unsafe {
+            battbar_merge_scan(
+                fresh.as_ptr(),
+                fresh.len() as i32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                entries.as_mut_ptr(),
+                &mut count,
+                &mut active,
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(count, 2);
+        assert_eq!((entries[0].from_previous, entries[0].index), (0, 1));
+        assert_eq!((entries[1].from_previous, entries[1].index), (0, 0));
+        assert_eq!(active, 0);
     }
 
     #[test]

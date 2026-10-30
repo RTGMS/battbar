@@ -101,7 +101,8 @@ final class AtkProvider {
             IOHIDDeviceSetReport(
                 device,
                 kIOHIDReportTypeOutput,
-                CFIndex(0x08),
+                // The core owns the report id; never hard-code it here.
+                CFIndex(ATKProtocol.reportID),
                 $0.baseAddress!,
                 CFIndex(packet.count)
             )

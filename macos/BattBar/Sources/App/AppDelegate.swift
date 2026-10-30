@@ -158,7 +158,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         scanner.onScanCompleted = { [weak self] outcome in
             guard let self else { return }
-            self.notifications.evaluate(outcome.devices, enabled: self.model.settings.lowBatteryAlerts)
+            // The merged list, not the fresh one: a device whose read failed keeps
+            // its alert state here, so it cannot notify twice for the same level.
+            self.notifications.evaluate(self.model.devices, enabled: self.model.settings.lowBatteryAlerts)
             self.scheduleRetryIfNeeded()
         }
     }
@@ -177,9 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         retrying = false
         guard let delay else { return }
         let timer = Timer(timeInterval: TimeInterval(delay) / 1000, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            self.retrying = true
-            self.refresh()
+            // The timer runs on the main run loop, so this is the main actor.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.retrying = true
+                self.refresh()
+            }
         }
         timer.tolerance = 1
         RunLoop.main.add(timer, forMode: .common)

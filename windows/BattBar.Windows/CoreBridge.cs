@@ -165,8 +165,9 @@ internal static class CoreDecisions
         map.AddRange(fresh);
         map.AddRange(previous);
 
-        IntPtr freshBuffer = BuildSummaries(fresh);
-        IntPtr previousBuffer = BuildSummaries(previous);
+        var strings = new List<IntPtr>();
+        IntPtr freshBuffer = BuildSummaries(fresh, strings);
+        IntPtr previousBuffer = BuildSummaries(previous, strings);
         IntPtr selected = Core.Alloc(selectedId ?? string.Empty);
         int capacity = Math.Max(1, map.Count);
         IntPtr entries = Marshal.AllocHGlobal(Marshal.SizeOf<Core.MergedRef>() * capacity);
@@ -209,6 +210,10 @@ internal static class CoreDecisions
         }
         finally
         {
+            foreach (IntPtr text in strings)
+            {
+                Core.Free(text);
+            }
             Marshal.FreeHGlobal(entries);
             Marshal.FreeHGlobal(freshBuffer);
             Marshal.FreeHGlobal(previousBuffer);
@@ -216,17 +221,23 @@ internal static class CoreDecisions
         }
     }
 
-    private static IntPtr BuildSummaries(IReadOnlyList<DeviceOutcome> devices)
+    private static IntPtr BuildSummaries(IReadOnlyList<DeviceOutcome> devices, List<IntPtr> strings)
     {
         int size = Marshal.SizeOf<Core.DeviceSummary>();
         IntPtr buffer = Marshal.AllocHGlobal(size * Math.Max(1, devices.Count));
         for (int index = 0; index < devices.Count; index++)
         {
             DeviceOutcome device = devices[index];
+            IntPtr id = Core.Alloc(device.Id);
+            IntPtr name = Core.Alloc(device.Name);
+            // The structs only borrow the strings: the caller frees them, so it
+            // needs the pointers.
+            strings.Add(id);
+            strings.Add(name);
             var summary = new Core.DeviceSummary
             {
-                Id = Core.Alloc(device.Id),
-                Name = Core.Alloc(device.Name),
+                Id = id,
+                Name = name,
                 Provider = (int)device.Provider,
                 Connection = (int)device.Connection,
             };

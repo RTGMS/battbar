@@ -136,8 +136,9 @@ internal static class Providers
 
             var slice = new byte[read];
             Array.Copy(buffer, slice, read);
-            int status = Core.battbar_atk_decode(0x08, slice, (UIntPtr)read, out Core.Reading reading,
-                out byte deviceStatus);
+            // The report id is a core constant; never hard-code it here.
+            int status = Core.battbar_atk_decode((byte)Core.battbar_atk_report_id(), slice, (UIntPtr)read,
+                out Core.Reading reading, out byte deviceStatus);
             if (status == Core.StatusOk)
             {
                 return (reading.Battery, reading.Charging == 1);

@@ -73,6 +73,10 @@ internal static class Core
     [DllImport(Lib)]
     internal static extern UIntPtr battbar_atk_request_len();
 
+    /// <summary>Report id the core expects for the battery command (0x08).</summary>
+    [DllImport(Lib)]
+    internal static extern ushort battbar_atk_report_id();
+
     [DllImport(Lib)]
     internal static extern int battbar_atk_request([Out] byte[] buffer, UIntPtr length);
 

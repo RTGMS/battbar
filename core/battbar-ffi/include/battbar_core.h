@@ -2,8 +2,9 @@
  * battbar-core C ABI
  *
  * The macOS Swift app links `libbattbar_ffi.a` and imports this header as its
- * bridging header. Windows does not need this file: the Windows UI is Rust and
- * depends on the `battbar-core` crate directly.
+ * bridging header. The Windows C# tray app P/Invokes the same functions from
+ * `battbar_ffi.dll` and repeats the signatures in `Core.cs`, so this file is the
+ * contract both platform layers have to match.
  *
  * ## Conventions
  *
@@ -209,7 +210,10 @@ typedef struct BattbarMergedDevice {
  * Merge a scan with the previous result and pick the active device.
  *
  * `out_entries` must have room for `fresh_count + previous_count` entries.
- * `out_active` receives `-1` when nothing is left. Returns 0 or an error code.
+ * `out_active` receives `-1` when nothing is left. An unknown `provider` or
+ * `connection` code is rejected with BATTBAR_ERROR_INVALID_ARGUMENT, because
+ * dropping such an entry would shift the indices of all the later ones.
+ * Returns 0 or an error code.
  */
 int32_t battbar_merge_scan(const BattbarDeviceSummary *fresh, int32_t fresh_count,
                            const BattbarDeviceSummary *previous, int32_t previous_count,

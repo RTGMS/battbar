@@ -7,15 +7,16 @@
 //!   `device_charging`, ...). The platform layer flattens one device into
 //!   key/value pairs and calls [`battery_from_attributes`] /
 //!   [`charging_from_attributes`].
-//! * **Windows** – PnP properties are read through SetupAPI; the platform
-//!   layer filters with [`is_likely_mouse`] and normalises with
-//!   [`validate_pnp_reading`].
+//! * **Windows** – the tray app walks the PnP registry for the battery
+//!   property; it keeps a node only when [`is_likely_mouse`] matches, the
+//!   value survives [`battery_from_attributes`], and the PnP tree does not
+//!   report the node as absent.
 //!
 //! Keeping the *selection rules* here is the whole point: the heuristics had
 //! drifted between the Swift and JavaScript implementations, and now there is
 //! one place to fix them.
 
-use crate::battery::{normalized_percent, parse_percent_text};
+use crate::battery::parse_percent_text;
 
 /// Attribute keys checked in order on macOS.
 pub const PREFERRED_BATTERY_KEYS: [&str; 4] = [
@@ -98,10 +99,6 @@ pub fn is_likely_mouse(name: &str, minor_type: &str) -> bool {
     if minor_lower.contains("mouse") || minor_lower.contains("pointing") {
         return true;
     }
-    // Windows PnP device class is reported as "Mouse".
-    if minor_lower == "mouse" {
-        return true;
-    }
     let haystack = squash(&format!("{name} {minor_type}"));
     MOUSE_KEYWORDS
         .iter()
@@ -178,39 +175,6 @@ pub fn macos_device_id(address: &str, name: &str) -> String {
     } else {
         format!("bt-macos:{address}")
     }
-}
-
-/// Result of validating one Windows PnP row.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PnpReading {
-    pub battery: u8,
-    pub instance_id: String,
-}
-
-/// Accept a Windows PnP row only when it is present, plausible and mouse-like.
-///
-/// A known-but-absent node keeps its stale battery value in the registry, so
-/// `present == Some(false)` must be rejected explicitly.
-pub fn validate_pnp_reading(
-    name: &str,
-    device_class: &str,
-    battery: Option<i64>,
-    present: Option<bool>,
-) -> Option<PnpReading> {
-    let battery = battery?;
-    if !(0..=100).contains(&battery) {
-        return None;
-    }
-    if present == Some(false) {
-        return None;
-    }
-    if !is_likely_mouse(name, device_class) {
-        return None;
-    }
-    Some(PnpReading {
-        battery: normalized_percent(battery),
-        instance_id: name.to_string(),
-    })
 }
 
 /// Windows device id, derived from the PnP instance id.
@@ -311,38 +275,6 @@ mod tests {
             "bt-macos:aa-bb-cc-dd-ee-ff"
         );
         assert_eq!(macos_device_id("", "MX Master 3S"), "bt-macos:mx master 3s");
-    }
-
-    #[test]
-    fn accepts_a_normal_windows_row() {
-        let reading = validate_pnp_reading("MX Master 3S", "Mouse", Some(75), Some(true));
-        assert_eq!(
-            reading,
-            Some(PnpReading {
-                battery: 75,
-                instance_id: "MX Master 3S".to_string()
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_absent_and_implausible_windows_rows() {
-        assert_eq!(
-            validate_pnp_reading("MX Master 3S", "Mouse", Some(75), Some(false)),
-            None
-        );
-        assert_eq!(
-            validate_pnp_reading("MX Master 3S", "Mouse", Some(120), Some(true)),
-            None
-        );
-        assert_eq!(
-            validate_pnp_reading("Magic Keyboard", "Keyboard", Some(90), Some(true)),
-            None
-        );
-        assert_eq!(
-            validate_pnp_reading("MX Master 3S", "Mouse", None, Some(true)),
-            None
-        );
     }
 
     #[test]
