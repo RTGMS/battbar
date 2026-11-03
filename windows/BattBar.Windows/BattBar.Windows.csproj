@@ -12,6 +12,9 @@
     <RootNamespace>BattBar</RootNamespace>
     <Version>2.4.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Same icon as the macOS app: the tray icon, the taskbar entry and the
+         published exe all use it. -->
+    <ApplicationIcon>..\..\build\icon.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
     <!-- Allows `dotnet build` on macOS/Linux for compile checks. -->
@@ -19,11 +22,24 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
+  <!-- Same icon as the macOS app, embedded so the single-file build can load it
+       at runtime (the tray icon and the window icon use it). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\build\icon.ico" LogicalName="BattBar.ico" />
+  </ItemGroup>
+
   <!-- The protocol core is a Rust DLL (core/battbar-ffi). CI builds it for
-       win-x64 and drops it next to the executable as battbar_ffi.dll. -->
+       win-x64 and drops it next to the executable as battbar_ffi.dll. Either
+       Rust target is accepted: MSVC when Visual Studio is installed, GNU
+       otherwise (the GNU toolchain needs no Visual Studio at all). -->
   <ItemGroup>
     <None Include="..\..\core\target\x86_64-pc-windows-msvc\release\battbar_ffi.dll"
           Condition="Exists('..\..\core\target\x86_64-pc-windows-msvc\release\battbar_ffi.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>battbar_ffi.dll</Link>
+    </None>
+    <None Include="..\..\core\target\x86_64-pc-windows-gnu\release\battbar_ffi.dll"
+          Condition="Exists('..\..\core\target\x86_64-pc-windows-gnu\release\battbar_ffi.dll') AND !Exists('..\..\core\target\x86_64-pc-windows-msvc\release\battbar_ffi.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>battbar_ffi.dll</Link>
     </None>

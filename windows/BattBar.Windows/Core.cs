@@ -87,6 +87,10 @@ internal static class Core
     [DllImport(Lib)]
     internal static extern UIntPtr battbar_razer_request_len();
 
+    /// <summary>Command class the core uses for the mouse commands (0x07).</summary>
+    [DllImport(Lib)]
+    internal static extern byte battbar_razer_command_class();
+
     [DllImport(Lib)]
     internal static extern int battbar_razer_request(byte commandClass, byte commandId,
         [Out] byte[] buffer, UIntPtr length);
@@ -98,6 +102,10 @@ internal static class Core
     [DllImport(Lib)]
     internal static extern int battbar_razer_decode_charging(byte[] bytes, UIntPtr length,
         out Reading reading);
+
+    /// <summary>Raw status byte of a Razer response (0x02 ok, 0x01 busy, 0x04 timeout).</summary>
+    [DllImport(Lib)]
+    internal static extern int battbar_razer_status(byte[] bytes, UIntPtr length);
 
     [DllImport(Lib)]
     internal static extern int battbar_bluetooth_battery(int count, IntPtr[] keys, IntPtr[] values);

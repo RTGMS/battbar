@@ -19,17 +19,26 @@ internal static class Autostart
         }
     }
 
-    internal static void Set(bool enabled)
+    /// <summary>Register or unregister the Run value; false when the registry refused.</summary>
+    internal static bool Set(bool enabled)
     {
-        using RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
-        if (enabled)
+        try
         {
-            string exe = Environment.ProcessPath ?? string.Empty;
-            key.SetValue(ValueName, $"\"{exe}\"", RegistryValueKind.String);
+            using RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
+            if (enabled)
+            {
+                string exe = Environment.ProcessPath ?? string.Empty;
+                key.SetValue(ValueName, $"\"{exe}\"", RegistryValueKind.String);
+            }
+            else
+            {
+                key.DeleteValue(ValueName, throwOnMissingValue: false);
+            }
+            return true;
         }
-        else
+        catch (Exception)
         {
-            key.DeleteValue(ValueName, throwOnMissingValue: false);
+            return false;
         }
     }
 }
