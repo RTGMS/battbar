@@ -60,8 +60,14 @@ pub fn battery_request() -> [u8; REQUEST_LENGTH] {
 /// prepend it to `bytes`; both shapes are accepted, matching the shipped macOS
 /// behaviour.
 pub fn decode(report_id: u8, bytes: &[u8]) -> Option<Result<Reading, DecodeError>> {
+    // Three shapes describe the same packet:
+    //   * the payload alone (`04 00 …`),
+    //   * the 0x08 packet id kept in front (`08 04 …`),
+    //   * the Windows input report id `0x00` in front (`00 04 …`, RS7 Air
+    //     receiver, captured on Windows 2026-10-31).
     let payload = match bytes.first() {
-        Some(&REPORT_ID) => &bytes[1..],
+        Some(&REPORT_ID) if bytes.get(1) == Some(&COMMAND_BATTERY) => &bytes[1..],
+        Some(&0x00) if bytes.get(1) == Some(&COMMAND_BATTERY) => &bytes[1..],
         _ if report_id != REPORT_ID => return None,
         _ => bytes,
     };
@@ -90,6 +96,11 @@ pub fn decode(report_id: u8, bytes: &[u8]) -> Option<Result<Reading, DecodeError
 /// (`usage_page 0xFF04` / `usage 0x02`) becomes separately visible and can be
 /// preferred.
 ///
+/// Any vendor-defined usage page marks the control collection, not just the
+/// `0xFF04` / `0x02` pair the shipped 1K receiver uses: a real ATK RS7 Air
+/// receiver answers on `0xFF60` / `0x61` (captured on Windows, 2026-10-31), and
+/// filtering those out left the Windows app with no candidate at all.
+///
 /// Some HID stacks only expose the first top-level collection, so interface 1
 /// of a plausible product is accepted as a fallback.
 ///
@@ -97,17 +108,20 @@ pub fn decode(report_id: u8, bytes: &[u8]) -> Option<Result<Reading, DecodeError
 /// reports one entry per device and only the primary usage page. Use
 /// [`is_macos_candidate`] for that model.
 pub fn is_candidate(device: &HidDeviceInfo) -> bool {
-    if !VENDOR_IDS.contains(&device.vendor_id) {
-        return false;
-    }
-    if device.usage_page == Some(VENDOR_USAGE_PAGE) && device.usage == Some(VENDOR_USAGE) {
-        return true;
-    }
-    device.interface == Some(1) && looks_like_atk_product(device.product_str())
+    VENDOR_IDS.contains(&device.vendor_id)
+        && (is_vendor_interface(device)
+            || (device.interface == Some(1) && looks_like_atk_product(device.product_str())))
 }
 
 /// Lowest usage page that marks an ATK vendor interface.
 pub const VENDOR_USAGE_PAGE_FLOOR: u16 = 0xff00;
+
+/// Whether this collection sits on a vendor-defined usage page.
+fn is_vendor_interface(device: &HidDeviceInfo) -> bool {
+    device
+        .usage_page
+        .is_some_and(|page| page >= VENDOR_USAGE_PAGE_FLOOR)
+}
 
 /// Whether an IOKit-enumerated device is worth opening.
 ///
@@ -123,10 +137,7 @@ pub const VENDOR_USAGE_PAGE_FLOOR: u16 = 0xff00;
 /// This is about the *API*, not the operating system: hidapi on macOS returns
 /// the per-collection shape and must use [`is_candidate`] instead.
 pub fn is_macos_candidate(device: &HidDeviceInfo) -> bool {
-    VENDOR_IDS.contains(&device.vendor_id)
-        && device
-            .usage_page
-            .is_some_and(|page| page >= VENDOR_USAGE_PAGE_FLOOR)
+    VENDOR_IDS.contains(&device.vendor_id) && is_vendor_interface(device)
 }
 
 /// Filter a per-device (IOKit) enumeration list, mirroring the shipped Swift
@@ -403,6 +414,23 @@ mod tests {
     }
 
     #[test]
+    fn decodes_a_windows_report_with_the_zero_report_id() {
+        // Captured from an RS7 Air receiver on Windows 2026-10-31: the HID
+        // stack keeps the input report id (`0x00`) in front of the packet.
+        let captured = [
+            0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x00,
+        ];
+        assert_eq!(
+            decode(REPORT_ID, &captured),
+            Some(Ok(Reading {
+                battery: 41,
+                charging: false
+            }))
+        );
+    }
+
+    #[test]
     fn reports_non_zero_status() {
         let payload = [0x04, 0x01, 0, 0, 0, 50, 0];
         assert_eq!(
@@ -430,6 +458,28 @@ mod tests {
 
         let mouse = dongle();
         assert!(is_candidate(&mouse));
+    }
+
+    #[test]
+    fn accepts_any_vendor_collection_on_real_hardware() {
+        // Captured from an ATK RS7 Air receiver on Windows (2026-10-31): the
+        // control collection is 0xFF60/0x61, not the 0xFF04/0x02 pair, and the
+        // product string contains none of the ATK needles. Filtering it out is
+        // what made the Windows build report "no mouse" with the receiver
+        // plugged in.
+        let rs7 = HidDeviceInfo {
+            path: r"\\?\hid#vid_373b&pid_1220&mi_01#7&224eaa90&0&0000".into(),
+            vendor_id: 0x373b,
+            product_id: 0x1220,
+            product: Some("RS7 Air".into()),
+            interface: Some(1),
+            usage_page: Some(0xff60),
+            usage: Some(0x0061),
+            ..Default::default()
+        };
+        assert!(is_candidate(&rs7));
+        assert!(is_macos_candidate(&rs7));
+        assert_eq!(find_candidates(&[rs7]).len(), 1);
     }
 
     #[test]

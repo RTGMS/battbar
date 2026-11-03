@@ -28,7 +28,8 @@ try {
 
 const ATK_VENDOR_IDS = new Set([0x373b, 0x3554]);
 const RAZER_VENDOR_ID = 0x1532;
-const RAZER_PIDS = new Set([0x00c1, 0x00b3]);
+// Viper V3 Pro wireless, HyperPolling receiver, Viper V2 Pro wired / wireless.
+const RAZER_PIDS = new Set([0x00c1, 0x00b3, 0x00a5, 0x00a6]);
 
 function hex(value) {
   return `0x${Number(value).toString(16).padStart(4, '0').toUpperCase()}`;
@@ -150,7 +151,7 @@ function probeRazer() {
     (device) => device.vendorId === RAZER_VENDOR_ID && RAZER_PIDS.has(device.productId)
   );
   if (devices.length === 0) {
-    console.log('未发现 Razer Viper V3 Pro / HyperPolling 接收器（VID 0x1532，PID 0x00C1 / 0x00B3）。');
+    console.log('未发现 Razer 接收器（VID 0x1532，PID 0x00C1 / 0x00B3 / 0x00A5 / 0x00A6）。');
     return;
   }
 

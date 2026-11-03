@@ -46,12 +46,68 @@ const ARGUMENT_INDEX: usize = 8;
 
 /// Razer vendor id.
 pub const VENDOR_ID: u16 = 0x1532;
-/// Viper V3 Pro (`0x00C1`) and HyperPolling receiver (`0x00B3`).
-pub const SUPPORTED_PIDS: [u16; 2] = [0x00c1, 0x00b3];
+/// Viper V3 Pro (`0x00C1`), HyperPolling receiver (`0x00B3`) and Viper V2 Pro
+/// wired / wireless (`0x00A5` / `0x00A6`).
+///
+/// The V2 Pro pair was added after reading a real Viper V2 Pro on Windows
+/// (2026-10-31); it speaks the same 90-byte report and transaction id.
+pub const SUPPORTED_PIDS: [u16; 4] = [0x00c1, 0x00b3, 0x00a5, 0x00a6];
+/// Generic Desktop / Mouse usage: the collection Razer mice answer on.
+pub const MOUSE_USAGE_PAGE: u16 = 0x0001;
+pub const MOUSE_USAGE: u16 = 0x0002;
+/// Most collections to hand back to the platform layer.
+pub const MAX_CANDIDATES: usize = 8;
 
 /// Whether this HID node belongs to a supported Razer mouse.
 pub fn is_candidate(device: &HidDeviceInfo) -> bool {
     device.vendor_id == VENDOR_ID && SUPPORTED_PIDS.contains(&device.product_id)
+}
+
+/// Rank a collection: interface 0 first, and the mouse collection inside it.
+///
+/// The Razer control interface is interface 0 (OpenRazer matches
+/// `bInterfaceNumber == 0`), and on a Viper V2 Pro receiver its mouse
+/// collection is the only one that accepts the 90-byte feature report. The
+/// keyboard interfaces mirror a "mouse" collection too, so the usage pair alone
+/// is not enough to pick the right node.
+fn rank(device: &HidDeviceInfo) -> (u8, u8) {
+    let interface = u8::from(device.interface != Some(0));
+    let mouse =
+        u8::from(device.usage_page != Some(MOUSE_USAGE_PAGE) || device.usage != Some(MOUSE_USAGE));
+    (interface, mouse)
+}
+
+/// Select the collections worth probing, best first.
+///
+/// **Enumeration model: one entry per collection.** A Razer receiver exposes a
+/// dozen collections (mouse, consumer control, keyboard, vendor-defined …) and
+/// only one of them accepts the feature report: on a Viper V2 Pro receiver that
+/// is the mouse collection of interface 0, while the others fail
+/// `HidD_SetFeature` with `ERROR_INVALID_FUNCTION` (captured on Windows,
+/// 2026-10-31). Ranking here means the platform layer only has to try the
+/// candidates in order and keep the first one that answers.
+///
+/// Collections that share a device path and interface are the same endpoint, so
+/// only the best-ranked one is kept.
+pub fn find_candidates(devices: &[HidDeviceInfo]) -> Vec<&HidDeviceInfo> {
+    let mut chosen: Vec<&HidDeviceInfo> = Vec::new();
+    for device in devices.iter().filter(|device| is_candidate(device)) {
+        match chosen
+            .iter()
+            .position(|other| other.path == device.path && other.interface == device.interface)
+        {
+            Some(slot) => {
+                if rank(device) < rank(chosen[slot]) {
+                    chosen[slot] = device;
+                }
+            }
+            None => chosen.push(device),
+        }
+    }
+    // `sort_by_key` is stable: equal ranks keep the enumeration order.
+    chosen.sort_by_key(|device| rank(device));
+    chosen.truncate(MAX_CANDIDATES);
+    chosen
 }
 
 /// Build a 90-byte request for one command.
@@ -151,14 +207,26 @@ pub struct DisplayName {
     pub subtitle: String,
 }
 
+/// Model names for the product ids we recognise, so a receiver that only
+/// reports a dongle string still gets a useful title.
+fn known_model_name(product_id: u16) -> Option<&'static str> {
+    match product_id {
+        0x00c1 => Some("Razer Viper V3 Pro"),
+        0x00a5 | 0x00a6 => Some("Razer Viper V2 Pro"),
+        _ => None,
+    }
+}
+
 /// Build the panel/menu titles for a Razer product string.
 pub fn make_display_name(product: &str, product_id: u16) -> DisplayName {
     let value = product.trim();
     let lower = value.to_ascii_lowercase();
     let is_dongle = lower.contains("dongle") || lower.contains("receiver");
 
-    let name = if lower.contains("viper v3 pro") || product_id == 0x00c1 {
+    let name = if lower.contains("viper v3 pro") {
         "Razer Viper V3 Pro".to_string()
+    } else if let Some(model) = known_model_name(product_id) {
+        model.to_string()
     } else if !value.is_empty() && !is_dongle {
         value.to_string()
     } else {
@@ -322,11 +390,115 @@ mod tests {
         };
         assert!(is_candidate(&supported));
 
+        let v2_pro = HidDeviceInfo {
+            vendor_id: VENDOR_ID,
+            product_id: 0x00a6,
+            ..Default::default()
+        };
+        assert!(is_candidate(&v2_pro), "Viper V2 Pro wireless");
+
         let other_pid = HidDeviceInfo {
             vendor_id: VENDOR_ID,
             product_id: 0x0c05,
             ..Default::default()
         };
         assert!(!is_candidate(&other_pid));
+    }
+
+    /// The collection list a Viper V2 Pro receiver exposes on Windows
+    /// (SetupAPI, 2026-10-31). Only interface 0's mouse collection answers the
+    /// feature report; the others fail with `ERROR_INVALID_FUNCTION`.
+    fn viper_v2_pro_collections() -> Vec<HidDeviceInfo> {
+        let node = |path: &str, interface: i32, page: u16, usage: u16| HidDeviceInfo {
+            path: path.to_string(),
+            vendor_id: VENDOR_ID,
+            product_id: 0x00a6,
+            product: Some("Razer Viper V2 Pro".into()),
+            serial_number: Some("000000000000".into()),
+            interface: Some(interface),
+            usage_page: Some(page),
+            usage: Some(usage),
+        };
+        vec![
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_01&col01", 1, 0x0001, 0x0002),
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_01&col02", 1, 0x000c, 0x0001),
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_01&col03", 1, 0x0001, 0x0006),
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_02&col01", 2, 0x0001, 0x0006),
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_01&col05", 1, 0x0001, 0x0080),
+            node(r"\\?\hid#vid_1532&pid_00a6&mi_00&col01", 0, 0x0001, 0x0002),
+        ]
+    }
+
+    #[test]
+    fn tries_the_mouse_collection_first() {
+        let devices = viper_v2_pro_collections();
+        let candidates = find_candidates(&devices);
+        assert_eq!(candidates[0].interface, Some(0));
+        assert_eq!(candidates[0].usage, Some(MOUSE_USAGE));
+        assert_eq!(
+            candidates.len(),
+            6,
+            "every distinct collection is a candidate"
+        );
+        // Behind it: the mouse collection of the keyboard interface, then the
+        // remaining collections in enumeration order.
+        assert_eq!(candidates[1].interface, Some(1));
+        assert_eq!(candidates[1].usage, Some(MOUSE_USAGE));
+    }
+
+    #[test]
+    fn dedupes_collections_on_the_same_endpoint() {
+        let devices = viper_v2_pro_collections();
+        let mut duplicated = devices.clone();
+        // A second collection on the same path+interface is the same endpoint.
+        duplicated.push(HidDeviceInfo {
+            path: devices[0].path.clone(),
+            interface: devices[0].interface,
+            vendor_id: VENDOR_ID,
+            product_id: 0x00a6,
+            usage_page: Some(0x0001),
+            usage: Some(0x0001),
+            product: Some("Razer Viper V2 Pro".into()),
+            ..Default::default()
+        });
+        let candidates = find_candidates(&duplicated);
+        assert_eq!(candidates.len(), devices.len());
+        assert_eq!(candidates[0].usage, Some(MOUSE_USAGE));
+    }
+
+    #[test]
+    fn decodes_a_captured_viper_v2_pro_response() {
+        // Captured on Windows 2026-10-31: 91 bytes, leading report id, then the
+        // 90-byte struct. arguments[1] = 0xFF → 100%.
+        let mut response = vec![0u8; REPORT_LENGTH + 1];
+        response[1] = 0x02; // status
+        response[2] = TRANSACTION_ID;
+        response[6] = DATA_SIZE;
+        response[7] = COMMAND_CLASS;
+        response[8] = BATTERY_COMMAND;
+        response[10] = 0xff;
+
+        assert_eq!(battery(&response), Some(100));
+        assert!(validate_response(&response, COMMAND_CLASS, BATTERY_COMMAND).is_ok());
+        assert_eq!(
+            decode_battery(&response).map(|reading| reading.battery),
+            Ok(100)
+        );
+
+        // The charging response from the same device: arguments[1] = 0.
+        let mut charging_response = response.clone();
+        charging_response[8] = CHARGING_COMMAND;
+        charging_response[10] = 0x00;
+        assert!(validate_response(&charging_response, COMMAND_CLASS, CHARGING_COMMAND).is_ok());
+        assert_eq!(charging(&charging_response), Some(false));
+    }
+
+    #[test]
+    fn names_the_viper_v2_pro() {
+        let named = make_display_name("Razer Viper V2 Pro", 0x00a6);
+        assert_eq!(named.name, "Razer Viper V2 Pro");
+        // Even when the receiver only reports a dongle string.
+        let bare = make_display_name("Razer Wireless Dongle", 0x00a6);
+        assert_eq!(bare.name, "Razer Viper V2 Pro");
     }
 }

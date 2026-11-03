@@ -179,10 +179,39 @@ pub unsafe extern "C" fn battbar_atk_decode(
     }
 }
 
+/// Status byte of a Razer response, so the platform layer can explain a
+/// failure without decoding the protocol itself.
+///
+/// Returns `0x00..=0xFF` (the raw status, after dropping a leading report id),
+/// or [`status::ERROR_TOO_SHORT`] when the buffer is not a full report.
+///
+/// # Safety
+/// `bytes` must be valid for reads of `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn battbar_razer_status(bytes: *const u8, len: usize) -> i32 {
+    if bytes.is_null() {
+        return status::ERROR_INVALID_ARGUMENT;
+    }
+    // SAFETY: the caller guarantees a readable region of `len` bytes.
+    let data = unsafe { slice::from_raw_parts(bytes, len) };
+    match razer::normalize_feature_report(data).first() {
+        Some(&value) => i32::from(value),
+        None => status::ERROR_TOO_SHORT,
+    }
+}
+
 /// Length of a Razer feature report, in bytes (90).
 #[no_mangle]
 pub extern "C" fn battbar_razer_request_len() -> usize {
     razer::REPORT_LENGTH
+}
+
+/// Command class used by the Razer mouse commands (0x07).
+///
+/// Exposed so the platform layer never has to hard-code a protocol constant.
+#[no_mangle]
+pub extern "C" fn battbar_razer_command_class() -> u8 {
+    razer::COMMAND_CLASS
 }
 
 /// Fill `out` with a Razer request for `command_class` / `command_id`
@@ -332,8 +361,10 @@ pub unsafe extern "C" fn battbar_atk_select(
     unsafe { select(devices, count, out_indices, capacity, out_count, false) }
 }
 
-/// Select the Razer receivers worth probing. Same contract as
-/// [`battbar_atk_select`].
+/// Select the Razer receivers worth probing, best collection first.
+///
+/// Same contract as [`battbar_atk_select`]: the ordering (control interface
+/// first) is the core's policy, the caller just tries the indices in order.
 ///
 /// # Safety
 /// Same as [`battbar_atk_select`].
@@ -369,29 +400,25 @@ unsafe fn select(
         owned.push(hid_info_from(unsafe { &*devices.add(index) }));
     }
 
-    let picked: Vec<usize> = if razer {
-        owned
-            .iter()
-            .enumerate()
-            .filter(|(_, device)| battbar_core::razer::is_candidate(device))
-            .map(|(index, _)| index)
-            .collect()
+    let picked: Vec<&battbar_core::HidDeviceInfo> = if razer {
+        battbar_core::razer::find_candidates(&owned)
     } else {
-        // The core returns references; map them back to indices.
         battbar_core::atk::find_candidates(&owned)
-            .into_iter()
-            .filter_map(|candidate| {
-                owned
-                    .iter()
-                    .position(|device| std::ptr::eq(device, candidate))
-            })
-            .collect()
     };
+    // Map the borrowed candidates back to indices into the caller's list.
+    let indices: Vec<usize> = picked
+        .into_iter()
+        .filter_map(|candidate| {
+            owned
+                .iter()
+                .position(|device| std::ptr::eq(device, candidate))
+        })
+        .collect();
 
-    let written = picked.len().min(capacity as usize);
+    let written = indices.len().min(capacity as usize);
     // SAFETY: the caller provides `capacity` writable slots.
     let out = unsafe { std::slice::from_raw_parts_mut(out_indices, written) };
-    for (slot, index) in out.iter_mut().zip(picked.iter()) {
+    for (slot, index) in out.iter_mut().zip(indices.iter()) {
         *slot = *index as i32;
     }
     // SAFETY: validated non-null above.
@@ -1126,6 +1153,12 @@ mod tests {
         };
         assert_eq!(result, status::OK);
         assert_eq!(reading.charging, 1);
+    }
+
+    #[test]
+    fn exposes_the_razer_command_class() {
+        assert_eq!(battbar_razer_command_class(), razer::COMMAND_CLASS);
+        assert_eq!(battbar_razer_request_len(), 90);
     }
 
     #[test]
