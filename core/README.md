@@ -116,9 +116,12 @@ FFI smoke test     ok
 | ATK 短包里的非零状态码 | Electron 静默丢弃（等到超时） | 立即返回 `Status(n)` | 用户能看到"设备返回状态 0x??"而不是 3 秒超时 |
 | 蓝牙 `-5%` | Electron 正则取到 `5` | 拒绝 | 负数被误读成正数是真 bug |
 | Razer 91 字节响应 | Swift 不处理，读到错位的字节 | 自动剥掉前导 report id | `TODO.md` 第 6 类失败排查项 |
+| ATK 输入报告带 `0x00` report id | 旧实现不认 | 剥掉前导 `0x00`（Windows `ReadFile` 形状） | 2026-10-31 Windows 真机抓包 |
+| ATK 非 `0xFF04/0x02` 厂商集合 | 只认 `0xFF04/0x02` | 接受任意 `0xFF00+` 厂商 page | RS7 Air 的控制集合是 `0xFF60/0x61` |
+| Razer 多集合 | 按枚举顺序尝试 | `interface 0` 鼠标集合优先排序 | 其余集合稳定返回 `ERROR_INVALID_FUNCTION` |
 
-上表前三项在 JS 对拍里会显示为 `skipped`；第四项在 Swift 对拍里显示为 `1 skipped`。
-**Windows 版与后续重构一律以核心行为为准**，旧实现只作为兼容参考。
+上表前四项在 JS / Swift 对拍里会显示为 `skipped`；**Windows 版与后续重构一律以核心行为为准**，
+旧实现只作为兼容参考。
 
 ## 真机验证（2026-10-27，ATK 1K 接收器）
 
@@ -144,6 +147,21 @@ BATTBAR_HW_ITERATIONS=30 core/scripts/hardware-test-macos.sh
 | 已发布 App 的 `--self-test` | PASS（设备 1 台、面板正常打开与关闭） |
 
 Razer 与蓝牙**无法在本次验证**：本机没有 Razer 接收器，也没有连接蓝牙鼠标。两者仍是未验证项。
+
+### Windows 真机验证（2026-10-31）
+
+同一份核心在 Windows 10 19045 上由 C# 托盘版调用（`windows/BattBar.Windows`），
+工具链是 `x86_64-pc-windows-gnu`（机器上没有 Visual Studio）：
+
+| 项目 | 结果 |
+| --- | --- |
+| ATK RS7 Air（`0x373B:0x1220`） | 41%，未充电；应答带 `0x00` report id，核心正确解码 |
+| Razer Viper V2 Pro（`0x1532:0x00A6`） | 100%，未充电；电量与充电命令均 `status=0x02` |
+| 候选选择 | ATK 选中 `0xFF60/0x61`；Razer 选中 `interface 0` 鼠标集合（`FeatureReportByteLength=91`） |
+| 一次完整扫描 | 约 250 ms（两把设备在线） |
+| 休眠态 | 接收器返回 `status=0x04`，平台层提示「动一下鼠标」 |
+
+`cargo test` 84 通过（61 单元 + 13 向量 + 10 FFI）；JS 对拍 40 通过 3 跳过；`npm test` 24 通过。
 
 ### 顺带发现：枚举 API 不同，不是操作系统不同
 

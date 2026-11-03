@@ -7,11 +7,16 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 **名字**：Batt（battery，电量）+ Bar（菜单栏 / 任务栏）；中文名「电量栏」。不限定设备类型，以后接键盘、耳机、手柄也不用改名。
 
-> macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows 原生版正在开发中。
+> macOS 应用文件、bundle ID、DMG / ZIP / EXE 与仓库统一使用 **BattBar**；界面和中文文案使用「电量栏」。Windows 原生托盘版已在 Windows 10 真机验证（ATK + Razer 同时在线）。
 
 <img src="docs/native-panel.png" width="744" alt="BattBar 原生面板">
 
 <img src="docs/native-menubar.png" width="690" alt="菜单栏显示效果">
+
+Windows 托盘版（电量文字直接画在任务栏上，没有边框卡片；点一下就是右键菜单）：
+
+<img src="docs/windows-tray.png" width="700" alt="Windows 任务栏里的常驻电量文字">
+<img src="docs/windows-menu.png" width="260" alt="Windows 右键菜单">
 
 ## 现在能做什么
 
@@ -20,7 +25,7 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 - **多设备上下轮播**：同时发现多个鼠标时，菜单栏每 5.5 秒上下切换一台；也可以在面板里选择设备。
 - **其他 App 全屏时自动隐藏**：检测到全屏窗口时隐藏菜单栏项、暂停轮询；退出全屏后自动恢复。
 - **ATK / VXE / MAD 2.4G 直读**：通过 Compx HID 协议读取，不依赖 ATK HUB。
-- **Razer Viper V3 Pro 2.4G**：按 OpenRazer 的 90 字节 feature report 协议实现，**当前为实验性，等待真机回归**。
+- **Razer 2.4G 直读**：Viper V3 Pro / Viper V2 Pro 按 OpenRazer 的 90 字节 feature report 协议读取；V2 Pro 已在 Windows 真机验证，V3 Pro 仍待真机。
 - **系统蓝牙鼠标**：读取 macOS 已维护的蓝牙设备电量，不发起蓝牙扫描。
 - **低电量提醒**：20% 和 10% 各通知一次；充电或回到 25% 以上后自动重置。
 - **等待唤醒**：接收器暂时没有响应时保留上一次读数，并标成 `~67%`，鼠标唤醒后自动更新。
@@ -30,14 +35,15 @@ BattBar 是一个常驻菜单栏 / 系统托盘的无线外设电量工具，当
 
 | 项目 | 状态 | 说明 |
 | --- | --- | --- |
-| ATK 2.4G | ✅ 已真机验证 | ATK 1K 接收器读到 100%（充电中） |
-| Razer Viper V3 Pro 2.4G | ⚠️ 代码完成，待真机验证 | 设备不在手边，见 [TODO](TODO.md#p0-razer-viper-v3-pro-24g-真机验证) |
+| ATK 2.4G | ✅ 已真机验证 | macOS 上 ATK 1K 接收器读到 100%；Windows 上 ATK RS7 Air 读到 41% |
+| Razer 2.4G | ✅ 已真机验证（V2 Pro） | Viper V2 Pro（`0x00A6`）在 Windows 读到 100%，与雷云一致；V3 Pro 仍待真机 |
+| Windows 原生托盘版 | ✅ 已真机验证 | Windows 10 19045：托盘图标、菜单、读数、`--probe` 均正常 |
 | 系统蓝牙鼠标 | ⚠️ 代码完成，待真机验证 | 解析有样例测试，暂无蓝牙鼠标回归 |
 | 菜单栏名称 + 电量 | ✅ 已实现并运行 | 自检读到 100% |
 | 长名称左右滚动 | ✅ 实现 + 模拟验证 | 超长名称触发溢出，滚动位移正常 |
 | 多设备纵向轮播 | ✅ 实现 + 组件验证 | 索引切换、过渡动画正常；待真实多设备回归 |
 | 全屏时隐藏 | ✅ 实现 + 模拟验证 | 覆盖全屏测试窗口可触发隐藏/恢复 |
-| 低内存 / 低 CPU | ✅ 已实测 | 空闲约 14 MB，CPU 接近 0 |
+| 低内存 / 低 CPU | ✅ 已实测 | 空闲约 14 MB，CPU 接近 0；Windows 托盘版约 36 MB |
 | 打包 / 文档 | ✅ 已完成 | DMG / ZIP / SHA256 / 双语文档 |
 
 ## 性能
@@ -119,22 +125,29 @@ cd release && shasum -a 256 -c SHA256SUMS.txt
 
 | 设备 | 连接方式 | 读取方式 | 状态 |
 | --- | --- | --- | --- |
-| ATK / VXE / MAD | 2.4G 接收器 | Compx HID report 8 | 已适配，ATK 1K 真机验证 |
-| Razer Viper V3 Pro | 2.4G 接收器 / HyperPolling dongle | Razer 90 字节 feature report | 已实现，实验性，待真机验证 |
-| 其他品牌蓝牙鼠标 | 蓝牙 | macOS `system_profiler` | 已实现，取决于系统是否报告电量 |
+| ATK / VXE / MAD | 2.4G 接收器 | Compx HID report 8 | 已适配；ATK 1K、ATK RS7 Air 均真机验证 |
+| Razer Viper V2 Pro / V3 Pro | 2.4G 接收器 / HyperPolling dongle | Razer 90 字节 feature report | 已适配；V2 Pro 真机验证，V3 Pro 待真机 |
+| 其他品牌蓝牙鼠标 | 蓝牙 | macOS `system_profiler` / Windows PnP 属性 | 已实现，取决于系统是否报告电量 |
 | 其他品牌 2.4G 鼠标 | 2.4G 接收器 | — | 需要逐个品牌增加 HID 适配器 |
 
 已验证设备：
 
-- `ATK Mouse 1K Dongle`，VID `0x373B` / PID `0x101A`，读取结果 100%（充电中）。
-- ATK 接收器不返回鼠标具体型号，因此显示为「ATK 无线鼠标」；蓝牙连接时会显示系统提供的名称。
+- `ATK Mouse 1K Dongle`，VID `0x373B` / PID `0x101A`，macOS 读取结果 100%（充电中）。
+- `RS7 Air`，VID `0x373B` / PID `0x1220`，Windows 读取结果 41%（使用中）。它的控制集合是
+  `0xFF60/0x61`，不是 1K 接收器的 `0xFF04/0x02`，核心两处都接受。
+- `Razer Viper V2 Pro`，VID `0x1532` / PID `0x00A6`，Windows 读取结果 100%（使用中），
+  与雷云显示一致。电量命令与充电命令都返回 `status=0x02`。
+- ATK 接收器不返回鼠标具体型号时显示为「ATK 无线鼠标」；蓝牙连接时会显示系统提供的名称。
 
-Razer 目标设备：
+Razer 设备：
 
-- Viper V3 Pro 无线 PID `0x00C1`；HyperPolling 无线接收器 PID `0x00B3`（VID 均为 `0x1532`）。
-- 代码路径、事务 ID、CRC、电量/充电命令均已按 OpenRazer 源码核对；因为手头没有真机，暂标记为实验性。
-- 插上雷蛇接收器后，面板会尝试自动识别；如果读到电量，会显示为「Razer Viper V3 Pro」或「Razer 无线鼠标」。
-- 排查时可运行 `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe` 查看原始识别结果。
+- 无线 PID：V3 Pro `0x00C1`、V2 Pro `0x00A6`；有线：V3 Pro `0x00C0`、V2 Pro `0x00A5`；
+  HyperPolling 无线接收器 `0x00B3`（VID 均为 `0x1532`）。
+- 事务 ID `0x1F`、CRC、电量/充电命令均按 OpenRazer 源码核对，并在 V2 Pro 上实测通过。
+- Windows 上只有鼠标集合（interface 0）接受 feature report，其余集合返回
+  `ERROR_INVALID_FUNCTION`；核心把候选按「interface 0 的鼠标集合优先」排好，平台层依次尝试。
+- 鼠标休眠时接收器返回 `status=0x04`（无应答），应用会提示「动一下鼠标」而不是报错。
+- 排查时运行 `BattBar.exe --probe`（Windows）或 `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe`（macOS）。
 
 ## 如何支持更多设备
 
@@ -215,29 +228,43 @@ node core/scripts/crosscheck.mjs
 
 ## Windows 开发
 
-要求：Windows 10/11、Rust（含 `x86_64-pc-windows-msvc` 目标）、.NET 8 SDK。
+要求：Windows 10/11、Rust、.NET 8 SDK。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\build.ps1
+# 没有安装 Visual Studio 时，用自带的 GNU 工具链（免 VS）：
+powershell -ExecutionPolicy Bypass -File windows\build.ps1 -RustTarget x86_64-pc-windows-gnu
 ```
 
 脚本会先把 Rust 核心编成 `battbar_ffi.dll`，再发布单文件 `BattBar.exe` 到 `release\win\`。
+`-RustTarget` 留空时，脚本会自动选择：系统里有 MSVC 链接器就用 `x86_64-pc-windows-msvc`，
+否则退回 `x86_64-pc-windows-gnu`（`rustup` 的 GNU 工具链自带链接器，不需要 Visual Studio）。
+
+诊断（不弹托盘、不占单实例锁，可以和应用同时运行）：
+
+```powershell
+release\win\BattBar.exe --probe      # 同时写入 %TEMP%\battbar-probe.txt
+```
+
+输出包含 HID 集合、核心选出的候选、逐个候选的读写尝试、读数和问题原因。
 
 工程结构（产物在 `windows/BattBar.Windows/`）：
 
 | 文件 | 职责 |
 | --- | --- |
-| `Program.cs` | 单实例 Mutex、启动 |
-| `TrayApplication.cs` | 托盘图标、右键菜单、定时扫描 |
+| `Program.cs` | 单实例 Mutex、`--probe` 分派、启动 |
+| `TrayApplication.cs` | 托盘图标、右键菜单、定时扫描、问题提示 |
 | `Core.cs` / `CoreBridge.cs` | 对 `battbar_ffi.dll` 的 P/Invoke 与编组，**不含判断逻辑** |
 | `Hid.cs` | SetupAPI 枚举、重叠 I/O 读写、feature report |
 | `Providers.cs` | ATK / Razer 扫描，候选与解码走 DLL |
+| `Probe.cs` | `--probe` 诊断输出 |
 | `BluetoothScanner.cs` | 注册表 PnP 电池属性 |
 | `BatteryIcon.cs` | 图标绘制 |
 | `Settings.cs` / `Autostart.cs` | 设置持久化、开机启动 |
 
 **所有协议与判定规则仍在 Rust 核心**；C# 只负责 OS 调用与界面。
-当前状态：`dotnet build` 通过，但还没有在真实 Windows 机器上运行过，清单见 [TODO.md](TODO.md#p0-windows-原生版)。
+当前状态：Windows 10 19045 真机验证通过（ATK RS7 Air 41%、Razer Viper V2 Pro 100%），
+剩余检查项见 [TODO.md](TODO.md#p0-windows-原生版)。
 
 ## macOS 开发
 
@@ -318,7 +345,26 @@ npm test           # 旧版 Node 测试
 npm run pack:win   # Windows x64 NSIS 安装包
 ```
 
-Windows 原生版的设计、限制和验证清单见 [TODO.md](TODO.md#p0-windows-原生版)。特别提醒：Windows 通知区域（系统托盘）只支持图标，不支持 macOS 这种名称文本，因此 Windows 版会采用图标电量 / 数字 / 悬浮提示的组合，具体方案待定。
+Windows 原生版的设计、限制和验证清单见 [TODO.md](TODO.md#p0-windows-原生版)。Windows 通知区域只能放图标，所以电量单独做成一条**常驻电量文字**，观感尽量贴 macOS 菜单栏：
+
+- 用分层窗口把内容直接画在任务栏上，**没有卡片、没有边框**，文字颜色从任务栏实际像素取样（深色任务栏白字、浅色任务栏深字）。托盘图标就是应用图标（`build/icon.ico`，同时作为 exe 图标）。
+- 每行一台设备：**名称 + 电池轮廓**（填充比例 = 电量、数字画在里面、充电时加闪电、休眠时整块变灰并显示 `~100%`），和 macOS 菜单栏那一项同一套画法。
+- 位置在通知区域左侧、任务栏内部；拖走之后位置会记住，菜单里有「归位到通知区域左侧」。
+- 点一下就弹出右键菜单；**点别处会自动关掉**（走 `NotifyIcon` 自己的弹出路径，先把自己的窗口设为前台）。
+- **读取失败不弹通知**：和 macOS 一样，只有 20% / 10% 低电量才通知；失败原因只出现在菜单的「提示：」行里（对应 macOS 面板里的 issue banner）。鼠标休眠时保留上次读数（`~100%`），不会整台消失。
+- 悬浮提示文案也照 macOS：`名称：上次读数 100%，充电中`；没有设备时是「电量栏 · 未发现鼠标」。
+- 别的程序全屏、任务栏自动隐藏、或任务栏被重启时，它会自己隐藏并在恢复后回来。
+- 设备多于任务栏高度时先压行高，再折叠成「+N 台」。
+- 竖着的任务栏（在左侧/右侧）会改成堆在通知区域上方。
+
+原生 Windows 版（C# / WinForms + 共享 Rust 核心）在 [`windows/`](windows/)，已在 Windows 10（19045）真机验证：Razer Viper V2 Pro 100%（任务栏常驻显示）、ATK RS7 Air 41%（有线鼠标，已在菜单「显示设备」里隐藏）。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\build.ps1   # 单文件 release\win\BattBar.exe
+release\win\BattBar.exe --probe                              # 诊断，同时写入 %TEMP%\battbar-probe.txt
+```
+
+菜单里的「显示设备」按设备勾选是否出现在任务栏和托盘里（协议里没有可靠的“有线/无线”标志，所以由用户决定）；「常驻电量条」可以整体关掉或归位。设置存在 `%APPDATA%\BattBar\settings.json`（`show_floating_strip`、`hidden_device_ids`、`strip_x` / `strip_y`）。
 
 ## 已知行为与排查
 

@@ -1,6 +1,6 @@
 # ATK / Compx 电量 HID 协议说明
 
-本文记录 BattBar（电量栏）中 ATK 2.4G 接收器电量读取所依据的协议。实现参考了 ATK HUB Web 版（WebHID）公开加载的 Compx 方案代码，并用 ATK 1K 接收器在 macOS 上实测验证。
+本文记录 BattBar（电量栏）中 ATK 2.4G 接收器电量读取所依据的协议。实现参考了 ATK HUB Web 版（WebHID）公开加载的 Compx 方案代码，并用 ATK 1K 接收器在 macOS 上、ATK RS7 Air 接收器在 Windows 上实测验证。
 
 > 协议可能随固件或接收器型号变化。本项目只做只读电量查询，不写入鼠标配置。
 
@@ -18,6 +18,20 @@ ATK 1K 接收器（示例）：
   - 输入 report `0x08`：16 字节
   - 输出 report `0x08`：16 字节
   - Feature report `0x06`：7 字节（本应用不使用）
+
+ATK RS7 Air 接收器（2026-10-31，Windows 实测）：
+
+- 产品名：`RS7 Air`
+- VID：`0x373B`，PID：`0x1220`
+- HID 接口：interface 1，**厂商集合是 `usagePage = 0xFF60`，`usage = 0x61`**（不是 `0xFF04/0x02`）
+- 报告长度按描述符：input / output 均为 **385 字节**（含 report ID）
+- 一次请求 → 应答约十几毫秒；读数 41%（未充电）
+
+### 集合选择规则（核心）
+
+`atk::is_candidate` 现在接受 **任意 vendor usage page（`0xFF00..=0xFFFF`）** 的集合，外加
+「interface 1 且产品名像 ATK 鼠标」的兜底；同一接口上如果同时存在 `0xFF04/0x02`，它仍然优先。
+早期实现只认 `0xFF04/0x02`，在 RS7 Air 上直接筛掉了唯一能应答的集合。
 
 ### macOS 上的枚举差异
 
@@ -64,6 +78,8 @@ checksum = (0x55 - ((0x08 + sum(bytes[0..14])) & 0xFF)) & 0xFF
 - **node-hid**：写入 17 字节（report ID + 16 字节数据）。
 - **macOS IOKit**：`IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x08, buffer, 17)`，buffer 的第一字节同样是 `0x08`。这一点容易踩坑：如果只传 16 字节 payload，写入会返回成功，但接收器不会应答。
 - **WebHID**：`sendReport(8, data16)`，report ID 由浏览器处理。
+- **Windows `WriteFile`**：必须按描述符声明的 output report 长度发送（RS7 Air 是 385 字节），
+  短包会直接返回 `ERROR_INVALID_PARAMETER (87)`。请求的 17 字节前面照旧，其余补 0。
 
 ## 应答
 
@@ -82,6 +98,18 @@ byte 15     checksum
 ```
 
 macOS 的输入回调会在 buffer 前带上 report ID，因此实际收到 17 字节。原生解析器会同时接受「带 report ID」和「不带 report ID」两种形式。
+
+Windows 的 `ReadFile` 会把输入报告头部的 report ID 一起返回，而 RS7 Air 应答的 report ID 是 **`0x00`**
+（不是请求用的 `0x08`），实测原始字节：
+
+```text
+00 04 00 00 00 00 29 00 00 00 00 00 00 00 00 49 00 …
+^^                              ^^ ^^
+report id 0x00                  41 0
+```
+
+核心的 `atk::decode` 因此接受三种形状：裸包（`04 …`）、前置 `0x08`（macOS/打包路径）、
+前置 `0x00`（Windows 输入报告）。有对应的真机向量测试。
 
 ### 实测样例
 

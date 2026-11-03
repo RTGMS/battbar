@@ -7,11 +7,16 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 **The name**: Batt (battery) + Bar (menu bar / taskbar). The Chinese name is **电量栏**. It is device-agnostic, so keyboards, headsets, and controllers can join later without a rename.
 
-> The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. A native Windows build is in progress.
+> The macOS bundle, bundle ID, DMG / ZIP / EXE, and repository all use **BattBar**; the UI and Chinese copy use **电量栏**. The native Windows tray app is hardware-verified on Windows 10 (ATK + Razer at the same time).
 
 <img src="docs/native-panel.png" width="744" alt="BattBar native panel">
 
 <img src="docs/native-menubar.png" width="690" alt="Menu bar preview">
+
+Windows tray app (the level is printed right in the taskbar; clicking it opens the menu):
+
+<img src="docs/windows-tray.png" width="700" alt="Windows taskbar battery strip">
+<img src="docs/windows-menu.png" width="280" alt="Windows context menu">
 
 ## Features
 
@@ -20,7 +25,7 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 - **Vertical rotation for multiple devices** — switches devices every 5.5 seconds; you can also select one in the panel.
 - **Hide while another app is fullscreen** — hides the status item and pauses polling; restores automatically when fullscreen ends.
 - **ATK / VXE / MAD 2.4G direct read** — uses the Compx HID protocol, no ATK HUB required.
-- **Razer Viper V3 Pro 2.4G** — implemented from the OpenRazer 90-byte feature-report protocol. **Experimental; hardware validation is pending.**
+- **Razer 2.4G direct read** — Viper V3 Pro / Viper V2 Pro over the OpenRazer 90-byte feature-report protocol; the V2 Pro is hardware-verified on Windows, the V3 Pro is still pending hardware.
 - **System Bluetooth mice** — reads battery data macOS already maintains; no Bluetooth scan is started.
 - **Low battery alerts** — one notification at 20% and one at 10%; resets after charging or returning above 25%.
 - **Last-known reading** — if the receiver does not answer, the previous value stays visible as `~67%` until the mouse wakes.
@@ -30,14 +35,15 @@ BattBar is a tiny menu bar / system tray utility for wireless peripheral battery
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| ATK 2.4G | ✅ Hardware-verified | ATK 1K receiver read 100% (charging) |
-| Razer Viper V3 Pro 2.4G | ⚠️ Code complete, hardware pending | See [TODO](TODO.md#p0-razer-viper-v3-pro-24g-hardware-validation) |
+| ATK 2.4G | ✅ Hardware-verified | ATK 1K read 100% on macOS; ATK RS7 Air read 41% on Windows |
+| Razer 2.4G | ✅ Hardware-verified (V2 Pro) | Viper V2 Pro (`0x00A6`) read 100% on Windows, matching Synapse; V3 Pro still pending |
+| Native Windows tray app | ✅ Hardware-verified | Windows 10 19045: tray icon, menu, readings and `--probe` all work |
 | System Bluetooth mice | ⚠️ Code complete, hardware pending | Parser has sample tests; no Bluetooth mouse regression yet |
 | Menu bar name + battery | ✅ Implemented and running | Self-test read 100% |
 | Long-name marquee | ✅ Implemented + simulated | Overflow and scroll offset verified |
 | Multi-device rotation | ✅ Implemented + component test | Index transition and animation verified; real multi-device test pending |
 | Fullscreen hide | ✅ Implemented + simulated | A screen-covering test window triggers hide/restore |
-| Low memory / CPU | ✅ Measured | ~14 MB idle; CPU close to zero |
+| Low memory / CPU | ✅ Measured | ~14 MB idle; CPU close to zero; Windows tray app ~36 MB |
 | Packaging / docs | ✅ Done | DMG / ZIP / SHA256 / bilingual docs |
 
 ## Performance
@@ -98,22 +104,33 @@ For a Bluetooth mouse, pair and connect it in System Settings first; nothing els
 
 | Device | Connection | Read path | Status |
 | --- | --- | --- | --- |
-| ATK / VXE / MAD | 2.4G receiver | Compx HID report 8 | Adapted; ATK 1K hardware-verified |
-| Razer Viper V3 Pro | 2.4G receiver / HyperPolling dongle | Razer 90-byte feature report | Implemented, experimental, hardware pending |
-| Other Bluetooth mice | Bluetooth | macOS `system_profiler` | Implemented; depends on what the system reports |
+| ATK / VXE / MAD | 2.4G receiver | Compx HID report 8 | Adapted; ATK 1K and ATK RS7 Air hardware-verified |
+| Razer Viper V2 Pro / V3 Pro | 2.4G receiver / HyperPolling dongle | Razer 90-byte feature report | Adapted; V2 Pro hardware-verified, V3 Pro pending |
+| Other Bluetooth mice | Bluetooth | macOS `system_profiler` / Windows PnP properties | Implemented; depends on what the system reports |
 | Other 2.4G brands | 2.4G receiver | — | Needs a per-brand HID adapter |
 
 Verified hardware:
 
-- `ATK Mouse 1K Dongle`, VID `0x373B` / PID `0x101A`, reading 100% while charging.
+- `ATK Mouse 1K Dongle`, VID `0x373B` / PID `0x101A`, reading 100% while charging (macOS).
+- `RS7 Air`, VID `0x373B` / PID `0x1220`, reading 41% (Windows). Its control collection is
+  `0xFF60/0x61`, not the 1K receiver's `0xFF04/0x02`; the core accepts both.
+- `Razer Viper V2 Pro`, VID `0x1532` / PID `0x00A6`, reading 100% (Windows), matching Synapse.
+  Both the battery and the charging command return `status=0x02`.
 - The ATK receiver does not expose the mouse model, so the app shows “ATK 无线鼠标”. A Bluetooth connection shows the system-provided name.
 
-Razer targets:
+Razer devices:
 
-- Viper V3 Pro wireless PID `0x00C1`; HyperPolling wireless dongle PID `0x00B3` (VID `0x1532` for both).
-- Transaction ID, CRC, battery/charging commands, and timing were checked against the OpenRazer sources. No physical device was available, so it remains experimental.
-- Plug in the Razer receiver and the panel will try to identify it. A successful read shows “Razer Viper V3 Pro” or “Razer 无线鼠标”.
-- For debugging, run `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe` to see the raw discovery result.
+- Wireless PIDs: V3 Pro `0x00C1`, V2 Pro `0x00A6`; wired: V3 Pro `0x00C0`, V2 Pro `0x00A5`;
+  HyperPolling wireless dongle `0x00B3` (VID `0x1532` for all).
+- Transaction ID `0x1F`, CRC and the battery/charging commands were checked against the OpenRazer
+  sources and are now measured on a V2 Pro.
+- On Windows only the mouse collection (interface 0) accepts the feature report; the other
+  collections answer `ERROR_INVALID_FUNCTION`. The core ranks “interface 0, mouse collection”
+  first and the platform layer tries the candidates in that order.
+- While the mouse sleeps the receiver answers `status=0x04` (no reply); the app says “move the
+  mouse” instead of failing.
+- For debugging, run `BattBar.exe --probe` on Windows or
+  `"/Applications/BattBar.app/Contents/MacOS/BattBar" --probe` on macOS.
 
 ## Adding device support
 
@@ -251,7 +268,20 @@ npm test           # legacy Node tests
 npm run pack:win   # Windows x64 NSIS installer
 ```
 
-See [TODO.md](TODO.md#p0-native-windows-app) for the native Windows design, limitations, and hardware checklist. In particular, the Windows notification area supports icons, not macOS-style text; the Windows app will use a combination of a battery icon, digits, and tooltips. The exact design is still open.
+See [TODO.md](TODO.md#p0-native-windows-app) for the native Windows design, limitations, and hardware checklist. In particular, the Windows notification area supports icons, not macOS-style text; the native app therefore uses a battery tile with digits plus a tooltip listing every device.
+
+The native Windows app (C# / WinForms over the shared Rust core) lives in [`windows/`](windows/) and is hardware-verified on Windows 10 (19045) with a Razer Viper V2 Pro (100%) and an ATK RS7 Air (41%, a wired mouse that is hidden with “显示设备”).
+
+The notification area can only hold an icon, so the readings are drawn **directly on the taskbar** by a layered window, styled like the macOS menu bar item: the device name plus a battery outline with the percentage inside (charging adds a bolt, a stale reading greys out and shows `~100%`). No card, no border, and the text colour is sampled from the taskbar pixels. The tray icon is the application icon (`build/icon.ico`, also used as the exe icon).
+
+It sits left of the notification area, closes the menu when you click elsewhere, hides while another app is fullscreen / the taskbar is auto-hidden / Explorer restarts, and remembers where you dragged it. **A failed read never raises a notification** — like macOS, only the 20% / 10% low-battery alerts do; the reason appears in the menu's “提示：” line (the macOS panel's issue banner). The tooltip uses the same wording: `Name：上次读数 100%，充电中`, or `电量栏 · 未发现鼠标` when there is nothing to show.
+
+Menu → **显示设备** picks which devices appear; **常驻电量条** turns the strip off or docks it back next to the tray. Settings live in `%APPDATA%\BattBar\settings.json` (`show_floating_strip`, `hidden_device_ids`, `strip_x` / `strip_y`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\build.ps1   # single-file release\win\BattBar.exe
+release\win\BattBar.exe --probe                              # diagnostics, also writes %TEMP%\battbar-probe.txt
+```
 
 ## Troubleshooting
 
